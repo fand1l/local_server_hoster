@@ -1,0 +1,19 @@
+# Залежності
+node_modules/
+
+# Збірки
+dist/
+build/
+
+# Дані панелі (БД + файли серверів, якщо запускати з кореня репозиторію)
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Логи та тимчасові файли
+*.log
+.env
+.env.*
+.DS_Store

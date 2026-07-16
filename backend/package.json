@@ -1,0 +1,34 @@
+{
+  "name": "@mc-hoster/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Бекенд панелі: Fastify REST API + WebSocket-консоль + керування Docker через dockerode",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/static": "^9.2.0",
+    "@fastify/websocket": "^11.0.1",
+    "better-sqlite3": "^12.2.0",
+    "dockerode": "^5.0.1",
+    "fastify": "^5.2.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/dockerode": "^3.3.32",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

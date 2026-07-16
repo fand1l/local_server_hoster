@@ -1,0 +1,86 @@
+/**
+ * Спільні типи домену "Minecraft-сервер" для всього бекенду.
+ *
+ * УВАГА: фронтенд має дзеркальну копію DTO-типів у `frontend/src/types.ts`.
+ * Якщо змінюєте щось тут — синхронізуйте і там.
+ */
+
+/** Тип ядра сервера. Значення збігаються зі змінною TYPE образу itzg/minecraft-server. */
+export const SERVER_KINDS = ['VANILLA', 'PAPER', 'FABRIC'] as const;
+export type ServerKind = (typeof SERVER_KINDS)[number];
+
+/**
+ * Стан життєвого циклу запису про сервер у БД (стан "провізії"):
+ *  - provisioning — тягнемо образ / створюємо контейнер;
+ *  - ready        — контейнер створено, можна запускати/зупиняти;
+ *  - error        — остання провізія завершилася помилкою (можна повторити через start).
+ */
+export type ProvisionStatus = 'provisioning' | 'ready' | 'error';
+
+/**
+ * Зведений стан для UI, обчислюється з ProvisionStatus + живого стану Docker:
+ *  - creating — йде провізія;
+ *  - running  — контейнер працює;
+ *  - stopped  — контейнер існує (або буде перестворений), але не запущений;
+ *  - error    — провізія впала;
+ *  - unknown  — Docker-демон недоступний, живий стан невідомий.
+ */
+export type RuntimeStatus = 'creating' | 'running' | 'stopped' | 'error' | 'unknown';
+
+/** Запис про сервер так, як він зберігається у SQLite. */
+export interface ServerRecord {
+  id: string;
+  name: string;
+  kind: ServerKind;
+  /** Версія Minecraft ("1.21.8", "LATEST" тощо) — передається в образ як VERSION. */
+  version: string;
+  /** TCP-порт на хості, прокинутий на 25565 контейнера. */
+  hostPort: number;
+  /** Ліміт пам'яті JVM у мегабайтах (env MEMORY). */
+  memoryMb: number;
+  /** Абсолютний шлях до директорії з файлами сервера на хості (bind-mount /data). */
+  dataDir: string;
+  /** ID Docker-контейнера, якщо він уже створений. */
+  containerId: string | null;
+  status: ProvisionStatus;
+  /** Людиночитний деталізований стан ("Завантаження образу…", текст помилки тощо). */
+  statusDetail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** DTO, який віддаємо фронтенду: запис БД + обчислений живий стан. */
+export interface ServerView extends ServerRecord {
+  runtime: RuntimeStatus;
+  /** Додаткова інформація про живий стан (код виходу, "Docker недоступний" тощо). */
+  runtimeDetail: string | null;
+}
+
+/** Вхідні дані створення сервера (після zod-валідації). */
+export interface CreateServerInput {
+  name: string;
+  kind: ServerKind;
+  version: string;
+  hostPort: number;
+  memoryMb: number;
+  /** Користувач має явно прийняти Minecraft EULA — інакше сервер не стартує. */
+  acceptEula: true;
+  /** Одразу запустити сервер після створення контейнера. */
+  autoStart: boolean;
+}
+
+/** Один запис server.properties. */
+export interface PropertyEntry {
+  key: string;
+  value: string;
+}
+
+/** Повідомлення WebSocket-консолі: сервер → клієнт. */
+export type ConsoleServerMessage =
+  | { type: 'log'; data: string }
+  | { type: 'info'; message: string }
+  | { type: 'error'; message: string }
+  | { type: 'status'; runtime: RuntimeStatus };
+
+/** Повідомлення WebSocket-консолі: клієнт → сервер. */
+export type ConsoleClientMessage = { type: 'command'; data: string };

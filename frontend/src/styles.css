@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Вивід консолі: моноширинний, з переносами і власним скролом. */
+.console-output {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Тонкий скролбар для консолі та таблиць (WebKit/Blink). */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgb(63 63 70); /* zinc-700 */
+  border-radius: 4px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@mc-hoster/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Веб-інтерфейс панелі: Vite + TypeScript + Tailwind CSS (vanilla, без фреймворків)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.6",
+    "tailwindcss": "^4.0.6",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
