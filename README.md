@@ -1,11 +1,24 @@
-# ⛏️ MC Hoster — локальна панель Minecraft-серверів
+<div align="center">
 
-Self-hosted GUI-хостер: **Node.js-бекенд** керує Minecraft-серверами в ізольованих
-**Docker-контейнерах**, а **веб-інтерфейс** відкривається у браузері на `http://localhost:8080`.
+# ⛏️ MC Hoster
 
-- ✅ Кросплатформність: Windows / Linux / macOS (потрібен лише Docker + Node.js 20+)
-- ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — без встановлення Node.js ([розділ 4](#4-готові-збірки-exe-та-власна-збірка-бінарів))
+**Локальна панель керування Minecraft-серверами**
+
+Node.js-бекенд керує серверами в ізольованих Docker-контейнерах,
+а веб-інтерфейс відкривається у браузері на `http://localhost:8080`.
+
+[![Release binaries](https://github.com/fand1l/local_server_hoster/actions/workflows/release.yml/badge.svg)](../../actions/workflows/release.yml)
+![Node.js ≥ 20](https://img.shields.io/badge/Node.js-%E2%89%A5%2020-339933?logo=node.js&logoColor=white)
+![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Docker required](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)
+![Платформи](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+
+<img src="docs/screenshots/03-dashboard-running.png" alt="Дашборд MC Hoster із запущеним сервером" width="800">
+
+</div>
+
 - ✅ Створення сервера у пару кліків: ядро (Paper / Vanilla / Fabric), версія, порт, пам'ять
+- ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — Node.js встановлювати не потрібно
 - ✅ Образ [`itzg/minecraft-server`](https://docker-minecraft-server.readthedocs.io/) сам
   завантажує потрібний jar; панель сама підбирає правильну Java під версію гри
 - ✅ Файли сервера лежать на хості (bind-mount) — світ і конфіги завжди під рукою
@@ -13,9 +26,337 @@ Self-hosted GUI-хостер: **Node.js-бекенд** керує Minecraft-се
 - ✅ GUI-редактор `server.properties` зі збереженням коментарів у файлі
 - ✅ Живе без Docker: панель піднімається, чесно показує «Docker офлайн» і віддає 503 з поясненням
 
+## Зміст
+
+1. [Встановлення крок за кроком](#1-встановлення-крок-за-кроком) — 🪟 [Windows](#windows-guide) · 🍎 [macOS](#macos-guide) · 🐧 [Linux](#linux-guide)
+2. [Перші кроки в панелі](#2-перші-кроки-в-панелі)
+3. [Архітектура](#3-архітектура)
+4. [Структура проєкту](#4-структура-проєкту-npm-workspaces)
+5. [Конфігурація](#5-конфігурація)
+6. [Готові збірки та власна збірка бінарів](#6-готові-збірки-exe-та-власна-збірка-бінарів)
+7. [REST API та WebSocket-протокол](#7-rest-api-та-websocket-протокол)
+8. [Альтернатива: чистий JRE + свій jar](#8-альтернатива-без-itzg-чистий-jre--свій-jar)
+9. [Безпека](#9-безпека)
+10. [Типові проблеми](#10-типові-проблеми)
+
 ---
 
-## 1. Архітектура
+## 1. Встановлення крок за кроком
+
+> [!IMPORTANT]
+> Незалежно від ОС і способу запуску, **обов'язково потрібен Docker** — саме в його
+> контейнерах працюють Minecraft-сервери. Панель пакує лише себе, а не Docker Engine.
+
+Для кожної ОС є два шляхи:
+
+- **Спосіб А — готовий бінар** із [Releases](../../releases): нічого не потрібно, крім Docker.
+- **Спосіб Б — з сирців**: потрібен ще Node.js 20+ (для розробки або останніх змін).
+
+<a id="windows-guide"></a>
+
+<details>
+<summary><b>🪟 Windows — детальний гайд</b></summary>
+
+### Крок 1. Встановіть Docker Desktop
+
+1. Завантажте інсталятор: <https://www.docker.com/products/docker-desktop/> (кнопка *Download for Windows*).
+2. Запустіть `Docker Desktop Installer.exe`. Залиште увімкненим пункт
+   **Use WSL 2 instead of Hyper-V** — це рекомендований режим.
+3. Якщо інсталятор попросить компонент WSL 2 — дозвольте йому встановити,
+   або виконайте в PowerShell від адміністратора:
+
+   ```powershell
+   wsl --install
+   ```
+
+4. Перезавантажте комп'ютер, запустіть **Docker Desktop** із меню «Пуск»
+   і дочекайтеся статусу *Engine running* (зелений кит у треї).
+5. Перевірка у PowerShell:
+
+   ```powershell
+   docker version
+   ```
+
+   Має з'явитися блок `Server:` без помилок.
+
+### Крок 2А. Запуск із готового exe (рекомендовано)
+
+1. На сторінці [Releases](../../releases) завантажте `mc-hoster-win-x64.zip`.
+2. Розпакуйте архів у зручну теку, наприклад `C:\mc-hoster`
+   (ПКМ → «Видобути все…»). Усередині: `mc-hoster.exe` + тека `frontend\` —
+   **не розділяйте їх**, вони працюють разом.
+3. Двічі клацніть `mc-hoster.exe`.
+
+> [!NOTE]
+> **SmartScreen** може попередити про невідомого видавця (бінар не має цифрового
+> підпису). Натисніть **«Докладніше» → «Виконати попри все»**. Це стандартна
+> поведінка для будь-якого непідписаного exe.
+
+4. Відкриється консольне вікно панелі — не закривайте його, поки панель потрібна.
+
+### Крок 2Б. Запуск із сирців (потрібен Node.js)
+
+1. Встановіть Node.js LTS: <https://nodejs.org/> або в PowerShell:
+
+   ```powershell
+   winget install OpenJS.NodeJS.LTS
+   ```
+
+2. Завантажте код: кнопка **Code → Download ZIP** на GitHub (і розпакуйте),
+   або через git:
+
+   ```powershell
+   git clone https://github.com/fand1l/local_server_hoster.git
+   cd local_server_hoster
+   ```
+
+3. Встановіть залежності та зберіть:
+
+   ```powershell
+   npm install
+   npm run build
+   npm start
+   ```
+
+### Крок 3. Відкрийте панель
+
+У браузері перейдіть на **<http://127.0.0.1:8080>**. Праворуч угорі має світитися
+зелена пілюля **«Docker: онлайн»**. Далі — розділ [«Перші кроки в панелі»](#2-перші-кроки-в-панелі).
+
+### Корисне для Windows
+
+- Дані панелі (світи, конфіги, БД): `%USERPROFILE%\.mc-hoster`
+  (наприклад `C:\Users\Ваше_імʼя\.mc-hoster`).
+- Щоб друзі з локальної мережі могли зайти на сервер, дозвольте порт гри у брандмауері
+  (PowerShell від адміністратора, порт підставте свій):
+
+  ```powershell
+  netsh advfirewall firewall add rule name="Minecraft 25565" dir=in action=allow protocol=TCP localport=25565
+  ```
+
+- Автозапуск панелі разом із Windows: натисніть <kbd>Win</kbd>+<kbd>R</kbd> →
+  `shell:startup` → покладіть туди ярлик на `mc-hoster.exe`.
+
+</details>
+
+<a id="macos-guide"></a>
+
+<details>
+<summary><b>🍎 macOS — детальний гайд</b></summary>
+
+### Крок 1. Встановіть Docker Desktop
+
+1. Завантажте dmg під свій процесор: <https://www.docker.com/products/docker-desktop/>
+   — **Apple Silicon** (M1/M2/M3/M4) або **Intel chip**. Який у вас — дивіться
+   ` → Про цей Mac`.
+2. Відкрийте dmg і перетягніть **Docker** у **Applications**.
+3. Запустіть Docker з Launchpad, дозвольте системні запити й дочекайтеся
+   статусу *Docker Desktop is running* (кит у менюбарі).
+4. Перевірка у Терміналі:
+
+   ```bash
+   docker version
+   ```
+
+### Крок 2А. Запуск із готового бінара (рекомендовано)
+
+1. Із [Releases](../../releases) завантажте архів під свій чип:
+   `mc-hoster-macos-arm64.zip` (Apple Silicon) або `mc-hoster-macos-x64.zip` (Intel).
+2. Розпакуйте (подвійний клік). Усередині: бінар `mc-hoster` + тека `frontend/` —
+   **тримайте їх разом**.
+3. У Терміналі перейдіть у теку та запустіть:
+
+   ```bash
+   cd ~/Downloads/mc-hoster-macos-arm64
+   ./mc-hoster
+   ```
+
+> [!NOTE]
+> **Gatekeeper** заблокує перший запуск непідписаного бінара («не вдалося перевірити
+> розробника»). Або дозвольте його в **Системні параметри → Конфіденційність і
+> безпека → «Усе одно відкрити»**, або зніміть карантин однією командою:
+>
+> ```bash
+> xattr -d com.apple.quarantine ./mc-hoster
+> ```
+
+### Крок 2Б. Запуск із сирців (потрібен Node.js)
+
+```bash
+# Node.js через Homebrew (або інсталятор з nodejs.org)
+brew install node
+
+git clone https://github.com/fand1l/local_server_hoster.git
+cd local_server_hoster
+npm install
+npm run build
+npm start
+```
+
+### Крок 3. Відкрийте панель
+
+**<http://127.0.0.1:8080>** — угорі має бути зелена пілюля «Docker: онлайн».
+Далі — розділ [«Перші кроки в панелі»](#2-перші-кроки-в-панелі).
+
+### Корисне для macOS
+
+- Дані панелі: `~/.mc-hoster`.
+- IP для друзів у локальній мережі: `ipconfig getifaddr en0`
+  (або Системні параметри → Wi-Fi → Details).
+- Docker Desktop типово має доступ до вашої домашньої теки, тож bind-mount
+  працює без додаткових налаштувань File Sharing.
+
+</details>
+
+<a id="linux-guide"></a>
+
+<details>
+<summary><b>🐧 Linux — детальний гайд</b></summary>
+
+### Крок 1. Встановіть Docker Engine
+
+Найшвидше — офіційний скрипт (Ubuntu/Debian/Fedora/інші):
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+<sub>Або пакетами дистрибутива: `sudo apt install docker.io` (Ubuntu/Debian),
+`sudo dnf install docker-ce` ([репозиторій Docker](https://docs.docker.com/engine/install/fedora/)),
+`sudo pacman -S docker` (Arch).</sub>
+
+Увімкніть службу та додайте себе у групу `docker`, щоб панель працювала без sudo:
+
+```bash
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+newgrp docker        # або повністю перелогіньтеся
+
+docker run --rm hello-world   # перевірка: має надрукувати "Hello from Docker!"
+```
+
+### Крок 2А. Запуск із готового бінара (рекомендовано)
+
+```bash
+wget https://github.com/fand1l/local_server_hoster/releases/latest/download/mc-hoster-linux-x64.zip
+unzip mc-hoster-linux-x64.zip && cd mc-hoster-linux-x64
+chmod +x mc-hoster    # якщо архіватор не зберіг права
+./mc-hoster
+```
+
+Бінар і тека `frontend/` мають лежати поруч — не розділяйте їх.
+
+### Крок 2Б. Запуск із сирців (потрібен Node.js 20+)
+
+```bash
+# Node.js через nvm (або пакет вашого дистрибутива, якщо він ≥ 20)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+nvm install --lts
+
+git clone https://github.com/fand1l/local_server_hoster.git
+cd local_server_hoster
+npm install
+npm run build
+npm start
+```
+
+### Крок 3. Відкрийте панель
+
+**<http://127.0.0.1:8080>** — угорі має бути зелена пілюля «Docker: онлайн».
+Далі — розділ [«Перші кроки в панелі»](#2-перші-кроки-в-панелі).
+
+### Корисне для Linux
+
+- Дані панелі: `~/.mc-hoster`.
+- IP для друзів у мережі: `hostname -I` (перша адреса).
+- Якщо стоїть firewall — відкрийте порт гри: `sudo ufw allow 25565/tcp`.
+- Автозапуск через systemd (user-unit, шлях до бінара підставте свій):
+
+  ```ini
+  # ~/.config/systemd/user/mc-hoster.service
+  [Unit]
+  Description=MC Hoster panel
+  After=docker.service
+
+  [Service]
+  ExecStart=%h/mc-hoster/mc-hoster
+  Restart=on-failure
+
+  [Install]
+  WantedBy=default.target
+  ```
+
+  ```bash
+  systemctl --user enable --now mc-hoster
+  ```
+
+</details>
+
+---
+
+## 2. Перші кроки в панелі
+
+Після запуску панель виглядає так — порожній дашборд і зелений індикатор Docker:
+
+<p align="center"><img src="docs/screenshots/01-dashboard-empty.png" alt="Порожній дашборд після першого запуску" width="800"></p>
+
+### 2.1. Створіть сервер
+
+Натисніть **«+ Створити сервер»** і заповніть форму:
+
+<p align="center"><img src="docs/screenshots/02-create-modal.png" alt="Форма створення сервера" width="700"></p>
+
+| Поле | Що обрати |
+| --- | --- |
+| **Назва** | Будь-яка, наприклад «Сервер виживання» |
+| **Тип ядра** | **Paper** — рекомендовано (швидший за Vanilla, підтримує плагіни); Vanilla — чистий офіційний; Fabric — для fabric-модів |
+| **Версія** | Наприклад `1.21.8`, або `LATEST` — завжди остання |
+| **Порт** | `25565` — стандартний порт Minecraft; для другого сервера підійде `25566` і далі |
+| **Пам'ять (JVM)** | 2 ГБ вистачає на 2–5 гравців; для модів/багатьох гравців — 4 ГБ+ |
+| **EULA** | Обов'язково прийняти [Minecraft EULA](https://aka.ms/MinecraftEULA), інакше сервер не стартує |
+
+### 2.2. Дочекайтеся статусу «Працює»
+
+Перше створення триває кілька хвилин: панель завантажує Docker-образ і jar сервера
+(прогрес видно прямо на картці). Далі сервери стартують за секунди.
+
+<p align="center"><img src="docs/screenshots/03-dashboard-running.png" alt="Сервер запущено" width="800"></p>
+
+### 2.3. Користуйтеся консоллю
+
+Клацніть назву сервера або кнопку **«Консоль»** — логи течуть у реальному часі,
+внизу — поле для команд (історія — стрілками ↑/↓):
+
+<p align="center"><img src="docs/screenshots/04-console.png" alt="Інтерактивна консоль сервера" width="800"></p>
+
+Найкорисніші команди:
+
+```
+op ВашНікнейм            — дати собі права оператора
+gamemode creative Нік    — змінити режим гри
+whitelist add Нік        — додати гравця у білий список
+say Привіт усім!         — повідомлення в чат
+```
+
+### 2.4. Налаштуйте server.properties
+
+Вкладка **server.properties** — це GUI-редактор конфігурації сервера
+(файл з'являється після першого запуску). Змінили значення → **«Зберегти зміни»** →
+перезапустіть сервер кнопкою «Рестарт»:
+
+<p align="center"><img src="docs/screenshots/05-properties.png" alt="Редактор server.properties" width="800"></p>
+
+### 2.5. Зайдіть у гру
+
+| Хто підключається | Адреса у грі (Multiplayer → Add Server) |
+| --- | --- |
+| Ви, на цьому ж комп'ютері | `localhost:25565` |
+| Друзі з вашої локальної мережі | `IP-вашого-компʼютера:25565` (як дізнатись IP — див. «Корисне» у гайді своєї ОС) |
+| Друзі з інтернету | Потрібен проброс порту гри на роутері (port forwarding) на IP вашого ПК. Прокидайте **лише порт гри**, ніколи — порт панелі 8080 |
+
+---
+
+## 3. Архітектура
 
 ```mermaid
 flowchart LR
@@ -88,13 +429,17 @@ sequenceDiagram
 
 ---
 
-## 2. Структура проєкту (npm workspaces)
+## 4. Структура проєкту (npm workspaces)
 
 ```
 local_server_hoster/
 ├── package.json               # монорепозиторій: scripts dev/build/start
 ├── tsconfig.base.json         # спільні строгі налаштування TS
+├── .github/workflows/
+│   └── release.yml            # збірка бінарів win/mac/linux + GitHub Release
+├── docs/screenshots/          # скріншоти для цього README
 ├── backend/                   # Fastify + dockerode + better-sqlite3
+│   ├── scripts/package.mjs    # esbuild → pkg → staging-тека бінара
 │   └── src/
 │       ├── index.ts           # точка входу: конфіг → БД → Docker → роути → listen
 │       ├── app.ts             # Fastify: плагіни, error handler, роздача фронтенду
@@ -138,26 +483,9 @@ local_server_hoster/
 
 ---
 
-## 3. Швидкий старт
+## 5. Конфігурація
 
-Потрібні: **Node.js ≥ 20**, **Docker** (Docker Desktop на Windows/macOS, `dockerd` на Linux).
-
-```bash
-npm install          # ставить залежності обох пакетів (workspaces)
-
-# Продакшен-режим: один порт на все
-npm run build        # фронтенд (vite build) + бекенд (tsc)
-npm start            # панель на http://127.0.0.1:8080
-
-# Режим розробки: гарячий перезапуск бекенду + HMR фронтенду
-npm run dev          # бекенд :8080, UI на http://localhost:5173 (проксі /api → 8080)
-```
-
-Далі у браузері: **«+ Створити сервер»** → обрати ядро/версію/порт → панель сама стягне
-образ (перший раз — кілька хвилин), створить контейнер і запустить сервер.
-Гравці підключаються до `<IP-компʼютера>:<порт>`.
-
-### Змінні середовища
+Все налаштовується змінними середовища (дефолти підібрані «щоб просто працювало»):
 
 | Змінна | Типово | Опис |
 | --- | --- | --- |
@@ -165,28 +493,25 @@ npm run dev          # бекенд :8080, UI на http://localhost:5173 (про
 | `MC_HOSTER_HOST` | `127.0.0.1` | Інтерфейс панелі. **Не відкривайте назовні** — авторизації немає |
 | `MC_HOSTER_DATA_DIR` | `~/.mc-hoster` | БД + директорії серверів (`servers/<id>`) |
 | `MC_HOSTER_GAME_BIND_HOST` | `0.0.0.0` | Куди публікувати ігрові порти (0.0.0.0 = доступно з LAN) |
+| `MC_HOSTER_FRONTEND_DIR` | автопошук | Явний шлях до збірки фронтенду (для нетипових розкладок) |
 | `DOCKER_HOST` та ін. | — | Стандартні змінні Docker; без них: unix-сокет (Linux/macOS) або named pipe (Windows) |
 | `LOG_LEVEL` | `info` | Рівень логів бекенду (pino) |
 
+Скрипти розробника:
+
+```bash
+npm run dev         # гарячий перезапуск бекенду (:8080) + Vite HMR (:5173, проксі /api)
+npm run typecheck   # строгий tsc для обох пакетів
+npm run build       # продакшен-збірка фронтенду і бекенду
+```
+
 ---
 
-## 4. Готові збірки (.exe) та власна збірка бінарів
+## 6. Готові збірки (.exe) та власна збірка бінарів
 
-Не хочете ставити Node.js? На вкладці **[Releases](../../releases)** лежать
-самодостатні збірки, у які **вшито Node 22** — потрібно лише розпакувати й запустити.
-
-> ⚠️ Docker усе одно обов'язковий. Бінар пакує тільки панель, а не Docker Engine.
-> Встановіть Docker Desktop (Windows/macOS) або `dockerd` (Linux) окремо.
-
-| ОС | Архів | Як запустити |
-| --- | --- | --- |
-| Windows | `mc-hoster-win-x64.zip` | Розпакувати → двічі клацнути `mc-hoster.exe` (SmartScreen: «Докладніше» → «Виконати попри все») |
-| macOS | `mc-hoster-macos-*.zip` | Розпакувати → `./mc-hoster` у терміналі (Gatekeeper: дозволити в «Конфіденційність і безпека») |
-| Linux | `mc-hoster-linux-x64.zip` | Розпакувати → `./mc-hoster` |
-
-Після запуску відкрийте <http://127.0.0.1:8080>. **Тримайте теку `frontend/` поруч
-із бінаром** — панель віддає інтерфейс саме звідти (шлях можна перевизначити через
-`MC_HOSTER_FRONTEND_DIR`). Кожен архів містить `README.txt` з інструкцією.
+На вкладці **[Releases](../../releases)** лежать самодостатні збірки, у які **вшито
+Node 22** — покрокові інструкції запуску див. у [гайдах для своєї ОС](#1-встановлення-крок-за-кроком).
+Кожен архів містить `README.txt`, а тека `frontend/` має завжди лежати поруч із бінаром.
 
 ### Як це збирається
 
@@ -217,10 +542,13 @@ npm run build -w frontend
 npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 ```
 
+> [!NOTE]
 > Крос-компіляція під іншу ОС не підтримується: нативний `better-sqlite3` має
 > відповідати цільовій платформі, тож кожен бінар збирається на «своїй» ОС.
 
-## 5. REST API та WebSocket-протокол
+---
+
+## 7. REST API та WebSocket-протокол
 
 | Метод і шлях | Опис |
 | --- | --- |
@@ -245,7 +573,7 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 
 ---
 
-## 6. Альтернатива без itzg: чистий JRE + свій jar
+## 8. Альтернатива без itzg: чистий JRE + свій jar
 
 Якщо потрібен власний `server.jar` (наприклад, кастомна збірка), у
 [`docker/custom-jre`](docker/custom-jre/Dockerfile) є мінімальний образ:
@@ -261,30 +589,29 @@ docker run -d -i --name my-server -p 25565:25565 \
 
 ---
 
-## 7. Безпека
+## 9. Безпека
 
 - Панель слухає **тільки 127.0.0.1** і **не має авторизації** — це інструмент для
-  локальної машини. Не пробрасывайте її порт в інтернет без reverse-proxy з автентифікацією.
+  локальної машини. Не прокидайте її порт в інтернет без reverse-proxy з автентифікацією.
 - Бекенд спілкується з Docker-сокетом — фактично це root-еквівалент на машині.
   Запускайте панель лише від користувача, якому ви й так довіряєте Docker.
 - Видалення даних сервера захищене перевіркою, що шлях лежить строго всередині
   `MC_HOSTER_DATA_DIR/servers` (див. `utils/paths.ts`).
 
-## 8. Типові проблеми
+---
+
+## 10. Типові проблеми
+
+Якщо Docker не запущено, панель не «падає», а чесно показує стан і пояснює, що робити:
+
+<p align="center"><img src="docs/screenshots/06-docker-offline.png" alt="Банер «Docker офлайн»" width="800"></p>
 
 | Симптом | Причина / рішення |
 | --- | --- |
-| Банер «Docker офлайн», API віддає 503 | Демон не запущено. Windows/macOS: відкрийте Docker Desktop; Linux: `sudo systemctl start docker`. На Linux користувач має бути у групі `docker` |
-| `EACCES /var/run/docker.sock` | `sudo usermod -aG docker $USER` і перелогіньтесь |
+| Банер «Docker офлайн», API віддає 503 | Демон не запущено. Windows/macOS: відкрийте Docker Desktop; Linux: `sudo systemctl start docker` |
+| `EACCES /var/run/docker.sock` (Linux) | `sudo usermod -aG docker $USER` і перелогіньтесь |
 | Порт зайнятий при створенні | Панель перевіряє порт одразу і повертає 409; оберіть інший або звільніть порт |
 | Windows: контейнер не бачить файли | У Docker Desktop → Settings → Resources → File Sharing додайте диск/теку з `MC_HOSTER_DATA_DIR` (тека у профілі користувача зазвичай уже доступна) |
 | `server.properties` порожній у GUI | Файл зʼявляється після першого запуску сервера — запустіть і оновіть вкладку |
-| Старі версії MC не стартують | Панель сама обирає образ з Java 8/17/21 за версією; для екзотичних збірок використовуйте кастомний образ (розділ 5) |
-
-## 9. Скрипти розробника
-
-```bash
-npm run typecheck   # строгий tsc для обох пакетів
-npm run build       # продакшен-збірка
-npm run dev         # concurrently: tsx watch + vite dev
-```
+| Старі версії MC не стартують | Панель сама обирає образ з Java 8/17/21 за версією; для екзотичних збірок використовуйте кастомний образ ([розділ 8](#8-альтернатива-без-itzg-чистий-jre--свій-jar)) |
+| SmartScreen / Gatekeeper блокує бінар | Бінарі не мають цифрового підпису — це очікувано; як дозволити, описано у гайдах ОС ([розділ 1](#1-встановлення-крок-за-кроком)) |
