@@ -37,16 +37,47 @@ function intFromEnv(name: string, fallback: number): number {
   return value;
 }
 
+/**
+ * true, коли застосунок запущено як самодостатній бінар (pkg/SEA), а не через `node`.
+ * pkg виставляє `process.pkg`; у цьому режимі шляхи рахуємо відносно самого exe,
+ * а не відносно розташування коду (код лежить у віртуальній ФС снапшоту).
+ */
+const isPackaged = Boolean((process as { pkg?: unknown }).pkg);
+
+/**
+ * Знаходить директорію зібраного фронтенду (має містити index.html):
+ *  - явний override MC_HOSTER_FRONTEND_DIR — найвищий пріоритет (для нетипових розкладок);
+ *  - запакований бінар: `frontend/dist` поруч із виконуваним файлом (їде сайдкаром у zip);
+ *  - dev/збірка tsc: цей файл лежить на 2 рівні нижче кореня репозиторію.
+ */
+function resolveFrontendDist(): string | null {
+  const candidates: string[] = [];
+
+  const override = process.env.MC_HOSTER_FRONTEND_DIR;
+  if (override) {
+    candidates.push(path.resolve(override));
+  } else if (isPackaged) {
+    candidates.push(path.join(path.dirname(process.execPath), 'frontend', 'dist'));
+  } else {
+    // import.meta.url доступний лише в ESM (tsc/tsx); у запакованому бінарі
+    // ця гілка недосяжна, тож CJS-бандл ніколи не обчислює цей вираз.
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+    candidates.push(path.join(repoRoot, 'frontend', 'dist'));
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, 'index.html'))) return candidate;
+  }
+  return null;
+}
+
 export function loadConfig(): AppConfig {
   // За замовчуванням дані живуть у домашній директорії користувача:
   // на Windows/macOS Docker Desktop типово має доступ саме до неї,
   // тож bind-mount працюватиме без додаткових налаштувань File Sharing.
   const dataRoot = path.resolve(process.env.MC_HOSTER_DATA_DIR ?? path.join(os.homedir(), '.mc-hoster'));
 
-  // І у dev (src/), і у збірці (dist/) цей файл лежить на 2 рівні нижче кореня репозиторію.
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const distCandidate = path.join(repoRoot, 'frontend', 'dist');
-  const frontendDist = fs.existsSync(path.join(distCandidate, 'index.html')) ? distCandidate : null;
+  const frontendDist = resolveFrontendDist();
 
   return {
     host: process.env.MC_HOSTER_HOST ?? '127.0.0.1',

@@ -1,0 +1,113 @@
+# Збірка самодостатніх бінарів панелі під Windows / macOS / Linux
+# і публікація їх у GitHub Release.
+#
+# Тригер: пуш тега виду v* (напр. `git tag v0.1.0 && git push origin v0.1.0`).
+# Ручний запуск (workflow_dispatch) просто збирає артефакти без релізу.
+#
+# Кожна ОС збирається на СВОЄМУ раннері — нативний better-sqlite3 має
+# відповідати цільовій платформі, тож крос-компіляція не використовується.
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Потрібно для створення релізу та завантаження асетів.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Збірка (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Встановити Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # npm ci перезбере нативний better-sqlite3 під ОС раннера.
+      - name: Встановити залежності
+        run: npm ci
+
+      - name: Зібрати фронтенд
+        run: npm run build -w frontend
+
+      # esbuild → pkg → staging-тека dist-release/mc-hoster-<os>-<arch>/
+      # (pkg тут вільно тягне базовий Node-бінар з pkg-fetch).
+      - name: Запакувати бінар
+        run: npm run package -w backend
+
+      - name: Заархівувати (Linux/macOS)
+        if: matrix.platform != 'win'
+        run: |
+          cd dist-release
+          for dir in */; do
+            zip -r "${dir%/}.zip" "$dir"
+          done
+
+      - name: Заархівувати (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          Set-Location dist-release
+          Get-ChildItem -Directory | ForEach-Object {
+            Compress-Archive -Path $_.FullName -DestinationPath "$($_.Name).zip" -Force
+          }
+
+      - name: Вивантажити артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: mc-hoster-${{ matrix.platform }}
+          path: dist-release/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Публікація релізу
+    needs: build
+    runs-on: ubuntu-latest
+    # Реліз створюємо лише для пуша тега, не для ручного запуску.
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Зібрати всі артефакти
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Показати вміст
+        run: ls -R artifacts
+
+      - name: Створити GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            Самодостатні збірки панелі MC Hoster (Node вшито у бінар).
+
+            **Потрібен встановлений і запущений Docker** (Docker Desktop на
+            Windows/macOS, dockerd на Linux) — бінар пакує лише панель, не Docker.
+
+            Завантажте архів для своєї ОС, розпакуйте (тримайте `frontend/`
+            поруч із виконуваним файлом), запустіть і відкрийте
+            http://127.0.0.1:8080. Деталі — у README.txt всередині архіву.
