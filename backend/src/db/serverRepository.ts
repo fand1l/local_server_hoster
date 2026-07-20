@@ -7,8 +7,10 @@ interface ServerRow {
   name: string;
   kind: string;
   version: string;
+  core_version: string | null;
   host_port: number;
   memory_mb: number;
+  cpu_cores: number | null;
   data_dir: string;
   container_id: string | null;
   status: string;
@@ -31,8 +33,10 @@ function rowToRecord(row: ServerRow): ServerRecord {
     name: row.name,
     kind: row.kind as ServerKind,
     version: row.version,
+    coreVersion: row.core_version,
     hostPort: row.host_port,
     memoryMb: row.memory_mb,
+    cpuCores: row.cpu_cores,
     dataDir: row.data_dir,
     containerId: row.container_id,
     status: row.status as ProvisionStatus,
@@ -81,11 +85,11 @@ export class ServerRepository {
     this.db
       .prepare(
         `INSERT INTO servers
-           (id, name, kind, version, host_port, memory_mb, data_dir,
-            container_id, status, status_detail, created_at, updated_at)
+           (id, name, kind, version, core_version, host_port, memory_mb, cpu_cores,
+            data_dir, container_id, status, status_detail, created_at, updated_at)
          VALUES
-           (@id, @name, @kind, @version, @hostPort, @memoryMb, @dataDir,
-            @containerId, @status, @statusDetail, @createdAt, @updatedAt)`,
+           (@id, @name, @kind, @version, @coreVersion, @hostPort, @memoryMb, @cpuCores,
+            @dataDir, @containerId, @status, @statusDetail, @createdAt, @updatedAt)`,
       )
       .run(record);
   }

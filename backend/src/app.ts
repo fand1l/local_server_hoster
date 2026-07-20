@@ -22,6 +22,24 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     options: { maxPayload: 64 * 1024 }, // команди консолі — маленькі
   });
 
+  // Толерантний JSON-парсер: POST без тіла (start/stop/restart) — це нормально,
+  // навіть якщо клієнт за звичкою поставив Content-Type: application/json.
+  // Стандартний парсер Fastify у цьому випадку відповідає помилкою
+  // FST_ERR_CTP_EMPTY_JSON_BODY — саме її ми тут прибираємо.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    if (body === '' || body === undefined) {
+      done(null, undefined);
+      return;
+    }
+    try {
+      done(null, JSON.parse(body as string));
+    } catch {
+      const err = new Error('Некоректний JSON у тілі запиту') as Error & { statusCode: number };
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  });
+
   // Єдиний формат помилок API: { error: { code, message } }.
   app.setErrorHandler((err: unknown, req, reply) => {
     if (err instanceof AppError) {

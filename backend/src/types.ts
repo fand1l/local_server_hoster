@@ -34,10 +34,18 @@ export interface ServerRecord {
   kind: ServerKind;
   /** Версія Minecraft ("1.21.8", "LATEST" тощо) — передається в образ як VERSION. */
   version: string;
+  /**
+   * Версія ядра: для PAPER — номер білда (env PAPER_BUILD),
+   * для FABRIC — версія лоадера (env FABRIC_LOADER_VERSION).
+   * null — «остання доступна» (образ вирішує сам).
+   */
+  coreVersion: string | null;
   /** TCP-порт на хості, прокинутий на 25565 контейнера. */
   hostPort: number;
   /** Ліміт пам'яті JVM у мегабайтах (env MEMORY). */
   memoryMb: number;
+  /** Ліміт CPU контейнера в ядрах (NanoCpus); null — без ліміту. */
+  cpuCores: number | null;
   /** Абсолютний шлях до директорії з файлами сервера на хості (bind-mount /data). */
   dataDir: string;
   /** ID Docker-контейнера, якщо він уже створений. */
@@ -61,12 +69,29 @@ export interface CreateServerInput {
   name: string;
   kind: ServerKind;
   version: string;
+  /** Версія ядра (білд Paper / лоадер Fabric); відсутнє = остання. */
+  coreVersion?: string;
   hostPort: number;
   memoryMb: number;
+  /** Ліміт CPU у ядрах; відсутнє = без ліміту. */
+  cpuCores?: number;
   /** Користувач має явно прийняти Minecraft EULA — інакше сервер не стартує. */
   acceptEula: true;
   /** Одразу запустити сервер після створення контейнера. */
   autoStart: boolean;
+}
+
+/** Список версій із каталогу (онлайн-API або вбудований фолбек). */
+export interface VersionListResult {
+  versions: string[];
+  /** 'online' — свіжі дані з API; 'fallback' — вбудований список (немає мережі). */
+  source: 'online' | 'fallback';
+}
+
+/** Версії ядра під конкретну версію гри. */
+export interface CoreVersionsResult extends VersionListResult {
+  /** Рекомендоване значення (найновіший стабільний білд/лоадер) або null. */
+  latest: string | null;
 }
 
 /** Один запис server.properties. */

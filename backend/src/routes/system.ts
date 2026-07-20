@@ -1,9 +1,11 @@
+import os from 'node:os';
 import type { FastifyInstance } from 'fastify';
 import { getDocker, isDockerAvailable } from '../docker/client.js';
 
 /**
- * Службовий стан панелі: чи живий Docker-демон.
- * Фронтенд полить цей ендпоінт і показує банер, коли Docker не запущено.
+ * Службовий стан панелі: чи живий Docker-демон + ресурси машини.
+ * Фронтенд полить цей ендпоінт (банер стану Docker), а майстер створення
+ * використовує totalMemoryMb/cpuCount як межі повзунків ОЗП і ЦП.
  */
 export function registerSystemRoutes(app: FastifyInstance): void {
   app.get('/api/system', async () => {
@@ -19,6 +21,13 @@ export function registerSystemRoutes(app: FastifyInstance): void {
       }
     }
 
-    return { dockerAvailable, dockerVersion };
+    return {
+      dockerAvailable,
+      dockerVersion,
+      /** Фізична пам'ять машини у МБ — верхня межа повзунка ОЗП. */
+      totalMemoryMb: Math.floor(os.totalmem() / (1024 * 1024)),
+      /** Кількість логічних ядер — верхня межа повзунка ЦП. */
+      cpuCount: os.cpus().length,
+    };
   });
 }

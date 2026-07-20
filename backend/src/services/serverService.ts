@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { AppConfig } from '../config.js';
@@ -141,6 +142,18 @@ export class ServerService {
       throw new ConflictError(`Порт ${input.hostPort} уже зайнятий іншим процесом на цьому комп'ютері`);
     }
 
+    // Ліміти ресурсів не можуть перевищувати фізичні можливості машини.
+    const totalMemoryMb = Math.floor(os.totalmem() / (1024 * 1024));
+    if (input.memoryMb > totalMemoryMb) {
+      throw new ConflictError(
+        `Запитано ${input.memoryMb} МБ пам'яті, а на машині всього ${totalMemoryMb} МБ`,
+      );
+    }
+    const cpuCount = os.cpus().length;
+    if (input.cpuCores !== undefined && input.cpuCores > cpuCount) {
+      throw new ConflictError(`Запитано ${input.cpuCores} ядер, а на машині всього ${cpuCount}`);
+    }
+
     // Ранній чіткий 503, поки користувач ще у формі створення.
     await assertDockerAvailable();
 
@@ -151,8 +164,10 @@ export class ServerService {
       name: input.name,
       kind: input.kind,
       version: input.version,
+      coreVersion: input.coreVersion ?? null,
       hostPort: input.hostPort,
       memoryMb: input.memoryMb,
+      cpuCores: input.cpuCores ?? null,
       dataDir: path.join(this.config.serversRoot, id),
       containerId: null,
       status: 'provisioning',

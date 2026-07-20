@@ -41,4 +41,14 @@ function migrate(db: Database.Database): void {
     `);
     db.pragma('user_version = 1');
   }
+
+  if (version < 2) {
+    // v2: версія ядра (білд Paper / лоадер Fabric) і ліміт CPU.
+    // Для старих записів NULL = «остання версія» і «без ліміту» відповідно.
+    db.exec(`
+      ALTER TABLE servers ADD COLUMN core_version TEXT;
+      ALTER TABLE servers ADD COLUMN cpu_cores REAL;
+    `);
+    db.pragma('user_version = 2');
+  }
 }

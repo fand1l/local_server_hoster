@@ -17,7 +17,9 @@ Node.js-бекенд керує серверами в ізольованих Doc
 
 </div>
 
-- ✅ Створення сервера у пару кліків: ядро (Paper / Vanilla / Fabric), версія, порт, пам'ять
+- ✅ Покроковий майстер створення: ядро (Paper / Fabric), версія гри ↔ версія ядра з **живих
+  списків** (Mojang / PaperMC / FabricMC API — сумісність гарантована), повзунки ОЗП і ЦП
+  від реальних ресурсів вашого ПК
 - ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — Node.js встановлювати не потрібно
 - ✅ Образ [`itzg/minecraft-server`](https://docker-minecraft-server.readthedocs.io/) сам
   завантажує потрібний jar; панель сама підбирає правильну Java під версію гри
@@ -307,20 +309,27 @@ npm start
 
 <p align="center"><img src="docs/screenshots/01-dashboard-empty.png" alt="Порожній дашборд після першого запуску" width="800"></p>
 
-### 2.1. Створіть сервер
+### 2.1. Створіть сервер (майстер із 3 кроків)
 
-Натисніть **«+ Створити сервер»** і заповніть форму:
+Натисніть **«+ Створити сервер»** — відкриється покроковий майстер.
 
-<p align="center"><img src="docs/screenshots/02-create-modal.png" alt="Форма створення сервера" width="700"></p>
+**Крок 1 — назва та ядро.** **Paper** — рекомендовано (оптимізований, підтримує плагіни),
+**Fabric** — для модів (інші ядра додамо згодом):
 
-| Поле | Що обрати |
-| --- | --- |
-| **Назва** | Будь-яка, наприклад «Сервер виживання» |
-| **Тип ядра** | **Paper** — рекомендовано (швидший за Vanilla, підтримує плагіни); Vanilla — чистий офіційний; Fabric — для fabric-модів |
-| **Версія** | Наприклад `1.21.8`, або `LATEST` — завжди остання |
-| **Порт** | `25565` — стандартний порт Minecraft; для другого сервера підійде `25566` і далі |
-| **Пам'ять (JVM)** | 2 ГБ вистачає на 2–5 гравців; для модів/багатьох гравців — 4 ГБ+ |
-| **EULA** | Обов'язково прийняти [Minecraft EULA](https://aka.ms/MinecraftEULA), інакше сервер не стартує |
+<p align="center"><img src="docs/screenshots/02-create-step1.png" alt="Крок 1: назва та ядро" width="700"></p>
+
+**Крок 2 — версія гри та версія ядра.** Списки живі, з офіційних API (Mojang, PaperMC,
+FabricMC), тому тут завжди є найновіші версії. Сумісність гарантована: під обрану версію
+гри показуються лише сумісні білди Paper / лоадери Fabric. За замовчуванням — «остання»:
+
+<p align="center"><img src="docs/screenshots/02-create-step2.png" alt="Крок 2: версія гри та ядра" width="700"></p>
+
+**Крок 3 — ресурси.** Повзунки ОЗП і ЦП обмежені реальними можливостями вашого ПК
+(панель сама їх визначає). 2 ГБ вистачає на 2–5 гравців; для модпаків беріть 4 ГБ+.
+Порт `25565` — стандартний для Minecraft. І не забудьте прийняти
+[Minecraft EULA](https://aka.ms/MinecraftEULA):
+
+<p align="center"><img src="docs/screenshots/02-create-step3.png" alt="Крок 3: ресурси та порт" width="700"></p>
 
 ### 2.2. Дочекайтеся статусу «Працює»
 
@@ -502,6 +511,7 @@ local_server_hoster/
 | `MC_HOSTER_GAME_BIND_HOST` | `0.0.0.0` | Куди публікувати ігрові порти (0.0.0.0 = доступно з LAN) |
 | `MC_HOSTER_FRONTEND_DIR` | автопошук | Явний шлях до збірки фронтенду (для нетипових розкладок) |
 | `DOCKER_HOST` та ін. | — | Стандартні змінні Docker; без них: unix-сокет (Linux/macOS) або named pipe (Windows) |
+| `MC_HOSTER_MOJANG_META_URL` / `MC_HOSTER_PAPER_META_URL` / `MC_HOSTER_PAPER_FILL_URL` / `MC_HOSTER_FABRIC_META_URL` | офіційні API | Перевизначення URL каталогів версій (дзеркала, тести) |
 | `LOG_LEVEL` | `info` | Рівень логів бекенду (pino) |
 
 Скрипти розробника:
@@ -559,9 +569,11 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 
 | Метод і шлях | Опис |
 | --- | --- |
-| `GET /api/system` | `{ dockerAvailable, dockerVersion }` |
+| `GET /api/system` | `{ dockerAvailable, dockerVersion, totalMemoryMb, cpuCount }` |
+| `GET /api/meta/versions?kind=` | Версії гри для ядра (живі списки з Mojang/PaperMC/FabricMC, кеш 30 хв, `source: online\|fallback`) |
+| `GET /api/meta/core-versions?kind=&version=` | Сумісні версії ядра (білди Paper / лоадери Fabric) під версію гри |
 | `GET /api/servers` | Список серверів + живий стан (`runtime: creating/running/stopped/error/unknown`) |
-| `POST /api/servers` | Створити: `{ name, kind, version, hostPort, memoryMb, acceptEula: true, autoStart }` → `201`, провізія у фоні |
+| `POST /api/servers` | Створити: `{ name, kind, version, coreVersion?, hostPort, memoryMb, cpuCores?, acceptEula: true, autoStart }` → `201`, провізія у фоні |
 | `GET /api/servers/:id` | Один сервер |
 | `POST /api/servers/:id/start` | Запуск (перестворює контейнер після помилки/видалення вручну) |
 | `POST /api/servers/:id/stop` | Graceful stop (до 60 с на збереження світу) |

@@ -5,7 +5,9 @@ import { ServerRepository } from './db/serverRepository.js';
 import { getDocker, isDockerAvailable } from './docker/client.js';
 import { ContainerManager } from './docker/containerManager.js';
 import { ConsoleGateway } from './docker/consoleGateway.js';
+import { VersionCatalog } from './minecraft/versionCatalog.js';
 import { registerConsoleRoute } from './routes/console.ws.js';
+import { registerMetaRoutes } from './routes/meta.js';
 import { registerPropertiesRoutes } from './routes/properties.js';
 import { registerServerRoutes } from './routes/servers.js';
 import { registerSystemRoutes } from './routes/system.js';
@@ -32,6 +34,7 @@ async function main(): Promise<void> {
   const service = new ServerService({ config, repo, containers, gateway, log: app.log });
 
   registerSystemRoutes(app);
+  registerMetaRoutes(app, new VersionCatalog());
   registerServerRoutes(app, service);
   registerPropertiesRoutes(app, service);
   registerConsoleRoute(app, { service, gateway });

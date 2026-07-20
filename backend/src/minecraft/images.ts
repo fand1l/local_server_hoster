@@ -27,8 +27,9 @@ export const SERVER_ID_LABEL = 'mc-hoster.server-id';
 /**
  * Підбирає тег образу з відповідною версією Java під версію Minecraft:
  *   до 1.16.x включно — Java 8;  1.17.x — Java 17 (мінімум 16);
- *   1.18–1.20.4 — Java 17;       1.20.5+ і новіші — Java 21.
- * Для нечислових версій (LATEST, снапшоти) беремо latest (найновіша Java).
+ *   1.18–1.20.4 — Java 17;       1.20.5–1.21.x — Java 21.
+ * Для новіших за 1.21 і для нечислових версій (LATEST, снапшоти, нові схеми
+ * нумерації) беремо latest — цей тег itzg завжди несе найновішу Java.
  */
 export function resolveImageForVersion(version: string): string {
   const match = /^1\.(\d+)(?:\.(\d+))?$/.exec(version.trim());
@@ -41,7 +42,8 @@ export function resolveImageForVersion(version: string): string {
   if (minor <= 16) tag = 'java8-multiarch';
   else if (minor <= 19) tag = 'java17';
   else if (minor === 20) tag = patch >= 5 ? 'java21' : 'java17';
-  else tag = 'java21';
+  else if (minor === 21) tag = 'java21';
+  else tag = 'latest'; // майбутні версії можуть вимагати новішої Java
 
   return `${IMAGE_REPO}:${tag}`;
 }
@@ -55,7 +57,9 @@ export function containerNameFor(serverId: string): string {
  * Змінні середовища для контейнера itzg/minecraft-server.
  * Довідник: https://docker-minecraft-server.readthedocs.io/
  */
-export function buildContainerEnv(record: Pick<ServerRecord, 'kind' | 'version' | 'memoryMb'>): string[] {
+export function buildContainerEnv(
+  record: Pick<ServerRecord, 'kind' | 'version' | 'coreVersion' | 'memoryMb'>,
+): string[] {
   const env = [
     // EULA приймає користувач у формі створення; без цього образ навмисно не стартує.
     'EULA=TRUE',
@@ -66,6 +70,12 @@ export function buildContainerEnv(record: Pick<ServerRecord, 'kind' | 'version' 
     // Явно вимикаємо GUI сервера (headless-контейнер).
     'GUI=FALSE',
   ];
+
+  // Закріплена версія ядра (без неї образ бере останню доступну).
+  if (record.coreVersion) {
+    if (record.kind === 'PAPER') env.push(`PAPER_BUILD=${record.coreVersion}`);
+    else if (record.kind === 'FABRIC') env.push(`FABRIC_LOADER_VERSION=${record.coreVersion}`);
+  }
 
   // На Linux itzg за замовчуванням працює від UID 1000 — щоб файли у bind-mount
   // належали поточному користувачу хоста, передаємо його UID/GID.

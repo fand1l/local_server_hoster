@@ -1,9 +1,12 @@
 import type {
+  CoreVersionsResult,
   CreateServerInput,
   PropertiesResponse,
   PropertyEntry,
+  ServerKind,
   ServerView,
   SystemInfo,
+  VersionListResult,
 } from './types';
 
 /** Помилка API з людиночитним повідомленням від бекенду. */
@@ -23,12 +26,16 @@ interface ErrorBody {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Content-Type ставимо ЛИШЕ коли реально є тіло: заголовок на порожньому
+  // POST (start/stop/restart) сервер справедливо вважає некоректним запитом.
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string>) };
+  if (init?.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   let res: Response;
   try {
-    res = await fetch(path, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
-    });
+    res = await fetch(path, { ...init, headers });
   } catch {
     throw new ApiError('Немає з’єднання з панеллю (бекенд не запущено?)', 0, 'NETWORK');
   }
@@ -46,6 +53,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /** Типізований клієнт REST API панелі. */
 export const api = {
   system: () => request<SystemInfo>('/api/system'),
+
+  metaVersions: (kind: ServerKind) =>
+    request<VersionListResult>(`/api/meta/versions?kind=${kind}`),
+  metaCoreVersions: (kind: ServerKind, version: string) =>
+    request<CoreVersionsResult>(
+      `/api/meta/core-versions?kind=${kind}&version=${encodeURIComponent(version)}`,
+    ),
 
   listServers: () => request<ServerView[]>('/api/servers'),
   getServer: (id: string) => request<ServerView>(`/api/servers/${id}`),

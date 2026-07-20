@@ -122,8 +122,15 @@ export function renderDashboard(root: HTMLElement): () => void {
         { class: 'flex flex-wrap gap-1.5' },
         chip(KIND_LABELS[server.kind]),
         chip(server.version, 'Версія Minecraft'),
+        server.coreVersion
+          ? chip(
+              server.kind === 'PAPER' ? `#${server.coreVersion}` : `loader ${server.coreVersion}`,
+              'Версія ядра',
+            )
+          : null,
         chip(`:${server.hostPort}`, 'Порт для гравців'),
         chip(formatMemory(server.memoryMb), 'Пам’ять JVM'),
+        server.cpuCores ? chip(`${server.cpuCores} CPU`, 'Ліміт CPU') : null,
       ),
       detailText
         ? el('p', { class: 'text-xs text-zinc-500 break-words', text: detailText })

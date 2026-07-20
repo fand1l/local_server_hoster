@@ -25,6 +25,13 @@ const createServerSchema = z.object({
     .min(1, 'Вкажіть версію (наприклад, 1.21.8 або LATEST)')
     .max(32)
     .regex(/^[A-Za-z0-9._-]+$/, 'Недопустимий формат версії'),
+  coreVersion: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .regex(/^[A-Za-z0-9._+-]+$/, 'Недопустимий формат версії ядра')
+    .optional(),
   hostPort: z
     .number({ invalid_type_error: 'Порт має бути числом' })
     .int()
@@ -34,7 +41,12 @@ const createServerSchema = z.object({
     .number({ invalid_type_error: "Об'єм пам'яті має бути числом" })
     .int()
     .min(512, "Мінімум 512 МБ пам'яті")
-    .max(32768, "Максимум 32 ГБ пам'яті"),
+    .max(1024 * 1024, "Завеликий об'єм пам'яті"),
+  cpuCores: z
+    .number({ invalid_type_error: 'Кількість ядер має бути числом' })
+    .min(0.5, 'Мінімум пів ядра')
+    .max(256, 'Забагато ядер')
+    .optional(),
   acceptEula: z.literal(true, {
     errorMap: () => ({ message: 'Потрібно прийняти Minecraft EULA' }),
   }),

@@ -349,7 +349,14 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
       chipsRow,
       chip(KIND_LABELS[view.kind]),
       chip(view.version, 'Версія Minecraft'),
+      view.coreVersion
+        ? chip(
+            view.kind === 'PAPER' ? `#${view.coreVersion}` : `loader ${view.coreVersion}`,
+            'Версія ядра',
+          )
+        : null,
       chip(formatMemory(view.memoryMb), 'Пам’ять JVM'),
+      view.cpuCores ? chip(`${view.cpuCores} CPU`, 'Ліміт CPU') : null,
     );
     addressLine.textContent =
       view.runtime === 'running'

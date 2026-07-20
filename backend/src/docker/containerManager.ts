@@ -66,6 +66,8 @@ export class ContainerManager {
         Memory: containerMemoryBytes(record.memoryMb),
         // MemorySwap == Memory → своп для контейнера вимкнено.
         MemorySwap: containerMemoryBytes(record.memoryMb),
+        // Ліміт CPU у ядрах (1 ядро = 1e9 наносекунд CPU за секунду).
+        ...(record.cpuCores ? { NanoCpus: Math.round(record.cpuCores * 1e9) } : {}),
         // Після перезавантаження хоста запущені сервери піднімуться самі,
         // але явна зупинка з панелі (docker stop) залишиться зупинкою.
         RestartPolicy: { Name: 'unless-stopped' },
