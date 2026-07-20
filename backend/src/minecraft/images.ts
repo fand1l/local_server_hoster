@@ -73,8 +73,22 @@ export function buildContainerEnv(
 
   // Закріплена версія ядра (без неї образ бере останню доступну).
   if (record.coreVersion) {
-    if (record.kind === 'PAPER') env.push(`PAPER_BUILD=${record.coreVersion}`);
-    else if (record.kind === 'FABRIC') env.push(`FABRIC_LOADER_VERSION=${record.coreVersion}`);
+    switch (record.kind) {
+      case 'PAPER':
+        env.push(`PAPER_BUILD=${record.coreVersion}`);
+        break;
+      case 'FABRIC':
+        env.push(`FABRIC_LOADER_VERSION=${record.coreVersion}`);
+        break;
+      case 'FORGE':
+        env.push(`FORGE_VERSION=${record.coreVersion}`);
+        break;
+      case 'NEOFORGE':
+        env.push(`NEOFORGE_VERSION=${record.coreVersion}`);
+        break;
+      default:
+        break; // VANILLA / SPIGOT окремої версії ядра не мають
+    }
   }
 
   // На Linux itzg за замовчуванням працює від UID 1000 — щоб файли у bind-mount

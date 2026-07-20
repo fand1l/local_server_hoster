@@ -2,7 +2,7 @@ import { api, ApiError } from '../api';
 import { el, mount } from '../dom';
 import { openCreateServerModal, openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
-import { BTN, chip, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
+import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
 import type { ServerView } from '../types';
 
 const REFRESH_INTERVAL_MS = 3000;
@@ -123,10 +123,7 @@ export function renderDashboard(root: HTMLElement): () => void {
         chip(KIND_LABELS[server.kind]),
         chip(server.version, 'Версія Minecraft'),
         server.coreVersion
-          ? chip(
-              server.kind === 'PAPER' ? `#${server.coreVersion}` : `loader ${server.coreVersion}`,
-              'Версія ядра',
-            )
+          ? chip(coreVersionChipText(server.kind, server.coreVersion), 'Версія ядра')
           : null,
         chip(`:${server.hostPort}`, 'Порт для гравців'),
         chip(formatMemory(server.memoryMb), 'Пам’ять JVM'),

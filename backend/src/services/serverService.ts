@@ -15,7 +15,13 @@ import {
   updateServerProperties,
   type PropertiesFileState,
 } from '../minecraft/properties.js';
-import type { CreateServerInput, PropertyEntry, ServerRecord, ServerView } from '../types.js';
+import type {
+  CreateServerInput,
+  PropertyEntry,
+  ServerRecord,
+  ServerView,
+  UpdateServerInput,
+} from '../types.js';
 import { isPathInside } from '../utils/paths.js';
 import { isTcpPortFree } from '../utils/ports.js';
 
@@ -261,9 +267,82 @@ export class ServerService {
       return this.toView(record, true); // уже працює — ідемпотентність
     }
 
+    // Автолікування: контейнери, створені старою версією панелі БЕЗ SELinux-мітки
+    // :Z, на Fedora/RHEL падають із "Permission denied" на /data/eula.txt.
+    // Перестворюємо такий контейнер із правильним bind (файли сервера на місці).
+    const binds = await this.containers.getBinds(record.containerId);
+    if (binds && !binds.some((bind) => bind.endsWith(':/data:Z'))) {
+      this.log.info(`Сервер ${id}: контейнер без SELinux-мітки :Z — перестворюю з оновленим bind`);
+      await this.containers.removeIfExists(record.containerId);
+      return this.reprovision(id);
+    }
+
     await this.containers.start(record.containerId);
     await this.gateway.notifyRuntimeChange(record, 'running');
     return this.toView(record, true);
+  }
+
+  /**
+   * Редагування сервера: назва — будь-коли; пам'ять/CPU — лише коли сервер
+   * зупинено (зміна лімітів вимагає перестворення контейнера, бо MEMORY —
+   * це env, який образ читає на старті).
+   */
+  async updateServer(id: string, patch: UpdateServerInput): Promise<ServerView> {
+    const record = this.mustGet(id);
+    if (record.status === 'provisioning') {
+      throw new ConflictError('Сервер ще створюється — дочекайтеся завершення');
+    }
+
+    const newName = patch.name?.trim();
+    if (newName && newName !== record.name) {
+      const existing = this.repo.findByName(newName);
+      if (existing && existing.id !== id) {
+        throw new ConflictError(`Сервер з іменем «${newName}» уже існує`);
+      }
+    }
+
+    const memoryChanged = patch.memoryMb !== undefined && patch.memoryMb !== record.memoryMb;
+    const cpuChanged =
+      patch.cpuCores !== undefined && (patch.cpuCores ?? null) !== record.cpuCores;
+
+    if (memoryChanged || cpuChanged) {
+      const totalMemoryMb = Math.floor(os.totalmem() / (1024 * 1024));
+      if (patch.memoryMb !== undefined && patch.memoryMb > totalMemoryMb) {
+        throw new ConflictError(
+          `Запитано ${patch.memoryMb} МБ пам'яті, а на машині всього ${totalMemoryMb} МБ`,
+        );
+      }
+      const cpuCount = os.cpus().length;
+      if (patch.cpuCores != null && patch.cpuCores > cpuCount) {
+        throw new ConflictError(`Запитано ${patch.cpuCores} ядер, а на машині всього ${cpuCount}`);
+      }
+
+      // Ліміти застосовуються при створенні контейнера → міняти можна лише на зупиненому.
+      if (record.containerId) {
+        await assertDockerAvailable();
+        const state = await this.containers.inspectState(record.containerId);
+        if (state.running) {
+          throw new ConflictError('Зупиніть сервер, щоб змінити ресурси (потрібне перестворення контейнера)');
+        }
+      }
+    }
+
+    const updated = this.repo.update(id, {
+      ...(newName ? { name: newName } : {}),
+      ...(patch.memoryMb !== undefined ? { memoryMb: patch.memoryMb } : {}),
+      ...(patch.cpuCores !== undefined ? { cpuCores: patch.cpuCores ?? null } : {}),
+    });
+    if (!updated) throw new NotFoundError(`Сервер з id=${id} не знайдено`);
+
+    // Перестворюємо контейнер із новими лімітами (світ у bind-mount — нічого не втрачається).
+    if ((memoryChanged || cpuChanged) && updated.containerId) {
+      await this.containers.removeIfExists(updated.containerId);
+      const containerId = await this.containers.createServerContainer(updated, this.config.gameBindHost);
+      this.repo.update(id, { containerId });
+      this.log.info(`Сервер ${updated.name} (${id}): контейнер перестворено з новими лімітами`);
+    }
+
+    return this.toView(this.mustGet(id), await isDockerAvailable());
   }
 
   private async reprovision(id: string): Promise<ServerView> {

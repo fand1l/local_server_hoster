@@ -3,7 +3,7 @@
  * Змінюючи бекенд, синхронізуйте цей файл.
  */
 
-export const SERVER_KINDS = ['VANILLA', 'PAPER', 'FABRIC'] as const;
+export const SERVER_KINDS = ['PAPER', 'VANILLA', 'FABRIC', 'SPIGOT', 'FORGE', 'NEOFORGE'] as const;
 export type ServerKind = (typeof SERVER_KINDS)[number];
 
 export type ProvisionStatus = 'provisioning' | 'ready' | 'error';
@@ -40,6 +40,13 @@ export interface CreateServerInput {
   cpuCores?: number;
   acceptEula: true;
   autoStart: boolean;
+}
+
+/** Поля, які можна змінити після створення (PATCH /api/servers/:id). */
+export interface UpdateServerInput {
+  name?: string;
+  memoryMb?: number;
+  cpuCores?: number | null;
 }
 
 export interface VersionListResult {

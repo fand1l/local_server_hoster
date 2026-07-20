@@ -22,6 +22,8 @@ interface ServerRow {
 /** Поля, які дозволено оновлювати через update(). */
 export interface ServerPatch {
   name?: string;
+  memoryMb?: number;
+  cpuCores?: number | null;
   containerId?: string | null;
   status?: ProvisionStatus;
   statusDetail?: string | null;
@@ -99,6 +101,8 @@ export class ServerRepository {
     // Білий список колонок захищає від випадкового SQL-впорскування через імена полів.
     const columnByField: Record<keyof ServerPatch, string> = {
       name: 'name',
+      memoryMb: 'memory_mb',
+      cpuCores: 'cpu_cores',
       containerId: 'container_id',
       status: 'status',
       statusDetail: 'status_detail',

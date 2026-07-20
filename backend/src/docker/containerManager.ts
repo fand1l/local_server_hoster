@@ -59,7 +59,10 @@ export class ContainerManager {
       StopTimeout: STOP_TIMEOUT_SECONDS,
       HostConfig: {
         // Bind-mount: файли сервера лежать на хості та доступні користувачу напряму.
-        Binds: [`${toDockerBindPath(record.dataDir)}:/data`],
+        // Суфікс :Z — SELinux-мітка (Fedora/RHEL): без неї контейнеру заборонено
+        // писати у примонтовану теку (Permission denied на eula.txt). На системах
+        // без SELinux (Ubuntu, Docker Desktop) прапорець просто ігнорується.
+        Binds: [`${toDockerBindPath(record.dataDir)}:/data:Z`],
         PortBindings: {
           [portKey]: [{ HostIp: gameBindHost, HostPort: String(record.hostPort) }],
         },
@@ -88,6 +91,20 @@ export class ContainerManager {
         return container.id;
       }
       throw translateDockerError(err, 'Створення контейнера');
+    }
+  }
+
+  /**
+   * Binds контейнера (для перевірки, чи створений він ще старою версією панелі
+   * без SELinux-мітки :Z). null — контейнер не існує.
+   */
+  async getBinds(containerId: string): Promise<string[] | null> {
+    try {
+      const info = await this.docker.getContainer(containerId).inspect();
+      return info.HostConfig?.Binds ?? [];
+    } catch (err) {
+      if (isDockerNotFound(err)) return null;
+      throw translateDockerError(err, 'Перевірка налаштувань контейнера');
     }
   }
 

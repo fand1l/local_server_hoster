@@ -6,6 +6,7 @@ import type {
   ServerKind,
   ServerView,
   SystemInfo,
+  UpdateServerInput,
   VersionListResult,
 } from './types';
 
@@ -65,6 +66,8 @@ export const api = {
   getServer: (id: string) => request<ServerView>(`/api/servers/${id}`),
   createServer: (input: CreateServerInput) =>
     request<ServerView>('/api/servers', { method: 'POST', body: JSON.stringify(input) }),
+  updateServer: (id: string, patch: UpdateServerInput) =>
+    request<ServerView>(`/api/servers/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteServer: (id: string, deleteData: boolean) =>
     request<void>(`/api/servers/${id}?deleteData=${deleteData}`, { method: 'DELETE' }),
 

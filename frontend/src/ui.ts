@@ -22,6 +22,9 @@ export const KIND_LABELS: Record<ServerKind, string> = {
   PAPER: 'Paper',
   VANILLA: 'Vanilla',
   FABRIC: 'Fabric',
+  SPIGOT: 'Spigot',
+  FORGE: 'Forge',
+  NEOFORGE: 'NeoForge',
 };
 
 /** Бейдж стану: кольорова крапка + підпис; деталі — у title. */
@@ -46,6 +49,13 @@ export function chip(text: string, title?: string): HTMLElement {
     text,
     title: title ?? '',
   });
+}
+
+/** Текст чіпа закріпленої версії ядра: Paper — білд, Fabric — лоадер, решта — як є. */
+export function coreVersionChipText(kind: ServerKind, coreVersion: string): string {
+  if (kind === 'PAPER') return `#${coreVersion}`;
+  if (kind === 'FABRIC') return `loader ${coreVersion}`;
+  return coreVersion;
 }
 
 export function formatMemory(memoryMb: number): string {

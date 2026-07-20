@@ -6,7 +6,7 @@
  */
 
 /** Тип ядра сервера. Значення збігаються зі змінною TYPE образу itzg/minecraft-server. */
-export const SERVER_KINDS = ['VANILLA', 'PAPER', 'FABRIC'] as const;
+export const SERVER_KINDS = ['PAPER', 'VANILLA', 'FABRIC', 'SPIGOT', 'FORGE', 'NEOFORGE'] as const;
 export type ServerKind = (typeof SERVER_KINDS)[number];
 
 /**
@@ -62,6 +62,14 @@ export interface ServerView extends ServerRecord {
   runtime: RuntimeStatus;
   /** Додаткова інформація про живий стан (код виходу, "Docker недоступний" тощо). */
   runtimeDetail: string | null;
+}
+
+/** Поля сервера, які можна змінити після створення. */
+export interface UpdateServerInput {
+  name?: string;
+  memoryMb?: number;
+  /** null — зняти ліміт CPU. */
+  cpuCores?: number | null;
 }
 
 /** Вхідні дані створення сервера (після zod-валідації). */

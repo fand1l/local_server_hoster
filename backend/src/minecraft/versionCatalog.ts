@@ -25,6 +25,12 @@ const MOJANG_MANIFEST_URL =
 const PAPER_V2_BASE = process.env.MC_HOSTER_PAPER_META_URL ?? 'https://api.papermc.io/v2';
 const PAPER_FILL_BASE = process.env.MC_HOSTER_PAPER_FILL_URL ?? 'https://fill.papermc.io/v3';
 const FABRIC_META_BASE = process.env.MC_HOSTER_FABRIC_META_URL ?? 'https://meta.fabricmc.net/v2';
+const FORGE_METADATA_URL =
+  process.env.MC_HOSTER_FORGE_META_URL ??
+  'https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json';
+const NEOFORGE_VERSIONS_URL =
+  process.env.MC_HOSTER_NEOFORGE_META_URL ??
+  'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge';
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 хв — версії виходять не щохвилини
 const FETCH_TIMEOUT_MS = 8000;
@@ -43,6 +49,26 @@ const FALLBACK_GAME_VERSIONS = [
 interface CacheEntry {
   expiresAt: number;
   value: unknown;
+}
+
+/**
+ * Порівняння версій "за здоровим глуздом" для сортування за спаданням:
+ * числові сегменти — як числа, текстові суфікси (beta/rc) — після релізів.
+ */
+function compareVersionsDesc(a: string, b: string): number {
+  const parse = (v: string) => v.split(/[.-]/);
+  const [pa, pb] = [parse(a), parse(b)];
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const [sa, sb] = [pa[i], pb[i]];
+    if (sa === undefined) return 1; // коротша (без суфікса) — новіша
+    if (sb === undefined) return -1;
+    const [na, nb] = [Number(sa), Number(sb)];
+    const [aNum, bNum] = [Number.isInteger(na), Number.isInteger(nb)];
+    if (aNum && bNum && na !== nb) return nb - na;
+    if (aNum !== bNum) return aNum ? -1 : 1; // число "новіше" за текстовий суфікс
+    if (!aNum && !bNum && sa !== sb) return sb.localeCompare(sa);
+  }
+  return 0;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -80,8 +106,15 @@ export class VersionCatalog {
           return { versions: await this.cached('paper:game', () => this.fetchPaperGameVersions()), source: 'online' };
         case 'FABRIC':
           return { versions: await this.cached('fabric:game', () => this.fetchFabricGameVersions()), source: 'online' };
+        // Spigot збирається під ті самі версії, що й vanilla, а окремого
+        // публічного API версій у нього немає — використовуємо список Mojang.
         case 'VANILLA':
+        case 'SPIGOT':
           return { versions: await this.cached('mojang:releases', () => this.fetchMojangReleases()), source: 'online' };
+        case 'FORGE':
+          return { versions: await this.cached('forge:game', () => this.fetchForgeGameVersions()), source: 'online' };
+        case 'NEOFORGE':
+          return { versions: await this.cached('neoforge:game', () => this.fetchNeoForgeGameVersions()), source: 'online' };
       }
     } catch {
       return { versions: FALLBACK_GAME_VERSIONS, source: 'fallback' };
@@ -135,28 +168,151 @@ export class VersionCatalog {
     return versions;
   }
 
+  /**
+   * Сирі дані Forge: maven-metadata.json має форму
+   * { "1.21.1": ["1.21.1-52.0.1", …], … } — версія гри → повні версії Forge.
+   */
+  private async fetchForgeMetadata(): Promise<Record<string, string[]>> {
+    return this.cached('forge:metadata', async () => {
+      const data = (await fetchJson(FORGE_METADATA_URL)) as Record<string, unknown>;
+      const result: Record<string, string[]> = {};
+      for (const [game, list] of Object.entries(data)) {
+        if (Array.isArray(list)) {
+          result[game] = list.filter((v): v is string => typeof v === 'string');
+        }
+      }
+      if (Object.keys(result).length === 0) throw new Error('Порожні метадані Forge');
+      return result;
+    });
+  }
+
+  /** Forge: версії гри = ключі метаданих, упорядковані за manifest'ом Mojang. */
+  private async fetchForgeGameVersions(): Promise<string[]> {
+    const metadata = await this.fetchForgeMetadata();
+    return this.orderByMojang(Object.keys(metadata));
+  }
+
+  /** Сирі дані NeoForge: { versions: ["21.1.115", "20.6.72-beta", …] }. */
+  private async fetchNeoForgeVersions(): Promise<string[]> {
+    return this.cached('neoforge:versions', async () => {
+      const data = (await fetchJson(NEOFORGE_VERSIONS_URL)) as { versions?: unknown };
+      const versions = Array.isArray(data.versions)
+        ? data.versions.filter((v): v is string => typeof v === 'string')
+        : [];
+      if (versions.length === 0) throw new Error('Порожній список NeoForge');
+      return versions;
+    });
+  }
+
+  /**
+   * NeoForge нумерується як <mcMinor>.<mcPatch>.<build> (напр. 21.1.115 ↔ MC 1.21.1),
+   * тож версію гри відновлюємо з двох перших сегментів, звіряючись зі списком Mojang
+   * (пробуємо і "1.a.b", і "a.b", і "1.a" — це покриває й нові схеми нумерації MC).
+   */
+  private async neoForgeGameVersionOf(neoVersion: string, releases: Set<string>): Promise<string | null> {
+    const match = /^(\d+)\.(\d+)\./.exec(neoVersion);
+    if (!match) return null;
+    const [a, b] = [match[1], match[2]];
+    const candidates = b === '0' ? [`1.${a}`, `${a}.0`, `1.${a}.${b}`] : [`1.${a}.${b}`, `${a}.${b}`];
+    for (const candidate of candidates) {
+      if (releases.has(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  /** NeoForge: версії гри, для яких існують збірки (порядок — за Mojang). */
+  private async fetchNeoForgeGameVersions(): Promise<string[]> {
+    const [neoVersions, releases] = await Promise.all([
+      this.fetchNeoForgeVersions(),
+      this.cached('mojang:releases', () => this.fetchMojangReleases()),
+    ]);
+    const releaseSet = new Set(releases);
+    const found = new Set<string>();
+    for (const neoVersion of neoVersions) {
+      const game = await this.neoForgeGameVersionOf(neoVersion, releaseSet);
+      if (game) found.add(game);
+    }
+    if (found.size === 0) throw new Error('Не вдалося зіставити версії NeoForge з версіями гри');
+    return releases.filter((release) => found.has(release));
+  }
+
+  /** Упорядковує список версій гри за порядком manifest'а Mojang (новіші першими). */
+  private async orderByMojang(versions: string[]): Promise<string[]> {
+    const set = new Set(versions);
+    try {
+      const releases = await this.cached('mojang:releases', () => this.fetchMojangReleases());
+      const ordered = releases.filter((release) => set.has(release));
+      // Версії, яких немає у manifest (екзотика типу "1.7.10_pre4"), не показуємо.
+      if (ordered.length > 0) return ordered;
+    } catch {
+      // Mojang недоступний — впорядкуємо самі.
+    }
+    return versions.sort(compareVersionsDesc);
+  }
+
   // ----------------------------------------------------------- версії ядра
 
   /**
    * Версії ядра ПІД конкретну версію гри:
-   *  - PAPER  → номери білдів (новіші першими);
-   *  - FABRIC → версії лоадера, сумісні з цією версією гри;
-   *  - VANILLA → порожньо (окремого ядра немає).
+   *  - PAPER    → номери білдів (новіші першими);
+   *  - FABRIC   → версії лоадера, сумісні з цією версією гри;
+   *  - FORGE    → версії Forge для цієї версії гри (без префікса "1.x.y-");
+   *  - NEOFORGE → версії NeoForge, чиї перші сегменти відповідають версії гри;
+   *  - VANILLA / SPIGOT → порожньо (окремої версії ядра немає).
    */
   async coreVersions(kind: ServerKind, gameVersion: string): Promise<CoreVersionsResult> {
-    if (kind === 'VANILLA') {
+    if (kind === 'VANILLA' || kind === 'SPIGOT') {
       return { versions: [], latest: null, source: 'online' };
     }
     try {
-      const versions =
-        kind === 'PAPER'
-          ? await this.cached(`paper:builds:${gameVersion}`, () => this.fetchPaperBuilds(gameVersion))
-          : await this.cached(`fabric:loader:${gameVersion}`, () => this.fetchFabricLoaders(gameVersion));
+      let versions: string[];
+      switch (kind) {
+        case 'PAPER':
+          versions = await this.cached(`paper:builds:${gameVersion}`, () => this.fetchPaperBuilds(gameVersion));
+          break;
+        case 'FABRIC':
+          versions = await this.cached(`fabric:loader:${gameVersion}`, () => this.fetchFabricLoaders(gameVersion));
+          break;
+        case 'FORGE':
+          versions = await this.fetchForgeVersionsFor(gameVersion);
+          break;
+        case 'NEOFORGE':
+          versions = await this.fetchNeoForgeVersionsFor(gameVersion);
+          break;
+      }
       return { versions, latest: versions[0] ?? null, source: 'online' };
     } catch {
       // Без мережі конкретні білди невідомі — залишаємо «остання» (образ сам обере).
       return { versions: [], latest: null, source: 'fallback' };
     }
+  }
+
+  /** Forge: "1.21.1-52.0.31" → "52.0.31" (env FORGE_VERSION приймає саме такий вигляд). */
+  private async fetchForgeVersionsFor(gameVersion: string): Promise<string[]> {
+    const metadata = await this.fetchForgeMetadata();
+    const full = metadata[gameVersion] ?? [];
+    if (full.length === 0) throw new Error(`Немає збірок Forge для ${gameVersion}`);
+    const prefix = `${gameVersion}-`;
+    return full
+      .map((v) => (v.startsWith(prefix) ? v.slice(prefix.length) : v))
+      .reverse(); // maven-metadata за зростанням → новіші першими
+  }
+
+  /** NeoForge: усі версії, що відповідають цій версії гри (новіші першими). */
+  private async fetchNeoForgeVersionsFor(gameVersion: string): Promise<string[]> {
+    const [neoVersions, releases] = await Promise.all([
+      this.fetchNeoForgeVersions(),
+      this.cached('mojang:releases', () => this.fetchMojangReleases()).catch(() => [gameVersion]),
+    ]);
+    const releaseSet = new Set(releases.length > 0 ? releases : [gameVersion]);
+    const matching: string[] = [];
+    for (const neoVersion of neoVersions) {
+      if ((await this.neoForgeGameVersionOf(neoVersion, releaseSet)) === gameVersion) {
+        matching.push(neoVersion);
+      }
+    }
+    if (matching.length === 0) throw new Error(`Немає збірок NeoForge для ${gameVersion}`);
+    return matching.sort(compareVersionsDesc);
   }
 
   /** Paper: білди версії. v2 → {builds:[числа]}; Fill v3 → [{id}] або {builds:[{id}]}. */

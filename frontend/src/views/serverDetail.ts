@@ -2,7 +2,7 @@ import { api, ApiError } from '../api';
 import { el, mount } from '../dom';
 import { openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
-import { BTN, chip, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
+import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
 import { ConsoleConnection } from '../ws';
 import type { PropertyEntry, ServerView } from '../types';
 
@@ -14,7 +14,7 @@ const CONSOLE_BUFFER_KEEP_CHARS = 350_000;
 /** Сторінка сервера: заголовок з діями + вкладки "Консоль" і "server.properties". */
 export function renderServerDetail(root: HTMLElement, serverId: string): () => void {
   let server: ServerView | null = null;
-  let activeTab: 'console' | 'properties' = 'console';
+  let activeTab: 'console' | 'properties' | 'settings' = 'console';
 
   // ------------------------------------------------------------- заголовок
 
@@ -284,10 +284,149 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     );
   }
 
+  // --------------------------------------------------------------- параметри
+
+  const settingsPanel = el('div', { class: 'space-y-4' });
+
+  /** Вкладка редагування: назва — будь-коли, ресурси — лише на зупиненому сервері. */
+  function renderSettings(): void {
+    const current = server;
+    if (!current) {
+      mount(settingsPanel, el('p', { class: 'text-sm text-zinc-500', text: 'Завантаження…' }));
+      return;
+    }
+
+    mount(settingsPanel, el('p', { class: 'text-sm text-zinc-500', text: 'Завантаження меж ресурсів…' }));
+
+    void api
+      .system()
+      .catch(() => null)
+      .then((system) => {
+        const totalMemoryMb = system?.totalMemoryMb ?? 8192;
+        const cpuCount = system?.cpuCount ?? 4;
+        const memoryMax = Math.max(2048, totalMemoryMb - 1024);
+        const resourcesLocked = current.runtime === 'running' || current.runtime === 'creating';
+
+        let memoryMb = Math.min(Math.max(current.memoryMb, 1024), memoryMax);
+        // Повзунок на максимумі = «без ліміту CPU» (надсилаємо null).
+        let cpuValue = current.cpuCores === null ? cpuCount : Math.min(current.cpuCores, cpuCount);
+
+        const nameInput = el('input', {
+          class:
+            'w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 ' +
+            'focus:border-emerald-500 focus:outline-none',
+          type: 'text',
+          value: current.name,
+        });
+
+        const formatGb = (mb: number): string =>
+          mb % 1024 === 0 ? `${mb / 1024} ГБ` : `${(mb / 1024).toFixed(1)} ГБ`;
+
+        const memoryLabel = el('span', { class: 'text-sm font-medium text-zinc-200' });
+        const memorySlider = el('input', {
+          type: 'range',
+          class: 'w-full accent-emerald-500 disabled:opacity-40',
+          min: '1024',
+          max: String(memoryMax),
+          step: '512',
+          value: String(memoryMb),
+          disabled: resourcesLocked,
+          onInput: (event) => {
+            memoryMb = Number((event.target as HTMLInputElement).value);
+            updateLabels();
+          },
+        });
+
+        const cpuLabel = el('span', { class: 'text-sm font-medium text-zinc-200' });
+        const cpuSlider = el('input', {
+          type: 'range',
+          class: 'w-full accent-emerald-500 disabled:opacity-40',
+          min: '1',
+          max: String(cpuCount),
+          step: '1',
+          value: String(cpuValue),
+          disabled: resourcesLocked,
+          onInput: (event) => {
+            cpuValue = Number((event.target as HTMLInputElement).value);
+            updateLabels();
+          },
+        });
+
+        function updateLabels(): void {
+          memoryLabel.textContent = `${formatGb(memoryMb)} із ${formatGb(totalMemoryMb)}`;
+          cpuLabel.textContent =
+            cpuValue >= cpuCount ? `усі ${cpuCount} ядер (без ліміту)` : `${cpuValue} із ${cpuCount} ядер`;
+        }
+        updateLabels();
+
+        const saveButton = el('button', { class: BTN.primary, text: 'Зберегти зміни' });
+        saveButton.addEventListener('click', () =>
+          withButtonLock(saveButton, async () => {
+            try {
+              const patch: Parameters<typeof api.updateServer>[1] = { name: nameInput.value.trim() };
+              if (!resourcesLocked) {
+                patch.memoryMb = memoryMb;
+                patch.cpuCores = cpuValue >= cpuCount ? null : cpuValue;
+              }
+              applyServer(await api.updateServer(serverId, patch));
+              toast('Налаштування збережено', 'success');
+              renderSettings(); // перерендер зі свіжими значеннями/станом
+            } catch (err) {
+              toast(err instanceof ApiError ? err.message : 'Не вдалося зберегти', 'error');
+            }
+          }),
+        );
+
+        mount(
+          settingsPanel,
+          resourcesLocked
+            ? el('p', {
+                class:
+                  'rounded-lg border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-300',
+                text: 'Сервер запущено: назву можна змінити зараз, а ресурси — лише після зупинки (потрібне перестворення контейнера).',
+              })
+            : el('p', {
+                class: 'text-xs text-zinc-500',
+                text: 'Зміна ресурсів перестворює контейнер із новими лімітами. Файли світу при цьому не зачіпаються.',
+              }),
+          el(
+            'label',
+            { class: 'block' },
+            el('span', { class: 'mb-1 block text-sm text-zinc-400', text: 'Назва сервера' }),
+            nameInput,
+          ),
+          el(
+            'div',
+            {},
+            el(
+              'div',
+              { class: 'mb-1 flex items-center justify-between' },
+              el('span', { class: 'text-sm text-zinc-400', text: 'Пам’ять (JVM)' }),
+              memoryLabel,
+            ),
+            memorySlider,
+          ),
+          el(
+            'div',
+            {},
+            el(
+              'div',
+              { class: 'mb-1 flex items-center justify-between' },
+              el('span', { class: 'text-sm text-zinc-400', text: 'Ліміт CPU' }),
+              cpuLabel,
+            ),
+            cpuSlider,
+          ),
+          saveButton,
+        );
+      });
+  }
+
   // ---------------------------------------------------------------- вкладки
 
   const consoleTabButton = el('button', { text: 'Консоль' });
   const propertiesTabButton = el('button', { text: 'server.properties' });
+  const settingsTabButton = el('button', { text: 'Параметри' });
   const tabPanelSlot = el('div', {});
 
   function tabClass(active: boolean): string {
@@ -299,16 +438,22 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     );
   }
 
-  function selectTab(tab: 'console' | 'properties'): void {
+  function selectTab(tab: 'console' | 'properties' | 'settings'): void {
     activeTab = tab;
     consoleTabButton.className = tabClass(tab === 'console');
     propertiesTabButton.className = tabClass(tab === 'properties');
-    mount(tabPanelSlot, tab === 'console' ? consolePanel : propertiesPanel);
+    settingsTabButton.className = tabClass(tab === 'settings');
+    mount(
+      tabPanelSlot,
+      tab === 'console' ? consolePanel : tab === 'properties' ? propertiesPanel : settingsPanel,
+    );
     if (tab === 'properties' && !propertiesLoaded) void loadProperties();
+    if (tab === 'settings') renderSettings();
   }
 
   consoleTabButton.addEventListener('click', () => selectTab('console'));
   propertiesTabButton.addEventListener('click', () => selectTab('properties'));
+  settingsTabButton.addEventListener('click', () => selectTab('settings'));
 
   // ------------------------------------------------------------- складання
 
@@ -332,7 +477,13 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
       ),
       el('div', { class: 'flex flex-wrap gap-2' }, startButton, stopButton, restartButton, deleteButton),
     ),
-    el('div', { class: 'mb-4 flex border-b border-zinc-800' }, consoleTabButton, propertiesTabButton),
+    el(
+      'div',
+      { class: 'mb-4 flex border-b border-zinc-800' },
+      consoleTabButton,
+      propertiesTabButton,
+      settingsTabButton,
+    ),
     tabPanelSlot,
   );
 
@@ -350,10 +501,7 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
       chip(KIND_LABELS[view.kind]),
       chip(view.version, 'Версія Minecraft'),
       view.coreVersion
-        ? chip(
-            view.kind === 'PAPER' ? `#${view.coreVersion}` : `loader ${view.coreVersion}`,
-            'Версія ядра',
-          )
+        ? chip(coreVersionChipText(view.kind, view.coreVersion), 'Версія ядра')
         : null,
       chip(formatMemory(view.memoryMb), 'Пам’ять JVM'),
       view.cpuCores ? chip(`${view.cpuCores} CPU`, 'Ліміт CPU') : null,

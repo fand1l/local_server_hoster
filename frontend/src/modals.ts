@@ -1,7 +1,7 @@
 import { api, ApiError } from './api';
 import { el, mount } from './dom';
 import { toast } from './toast';
-import { BTN } from './ui';
+import { BTN, KIND_LABELS } from './ui';
 import type { ServerKind, ServerView, SystemInfo } from './types';
 
 /** Загальний каркас модального вікна. Повертає функцію закриття. */
@@ -59,19 +59,50 @@ const INPUT_CLASS =
 
 const VERSION_PATTERN = /^[A-Za-z0-9._-]+$/;
 
-/** Ядра, доступні у майстрі (інші типи додамо пізніше). */
+/** Ядра, доступні у майстрі. */
 const WIZARD_KINDS: Array<{ kind: ServerKind; title: string; description: string }> = [
   {
     kind: 'PAPER',
     title: 'Paper',
-    description: 'Рекомендовано: оптимізований сервер із підтримкою плагінів',
+    description: 'Рекомендовано: оптимізований, підтримує плагіни',
+  },
+  {
+    kind: 'VANILLA',
+    title: 'Vanilla',
+    description: 'Чистий офіційний сервер Mojang',
   },
   {
     kind: 'FABRIC',
     title: 'Fabric',
     description: 'Для модів на Fabric Loader',
   },
+  {
+    kind: 'SPIGOT',
+    title: 'Spigot',
+    description: 'Класичний сервер із плагінами Bukkit/Spigot',
+  },
+  {
+    kind: 'FORGE',
+    title: 'Forge',
+    description: 'Для модів на Forge',
+  },
+  {
+    kind: 'NEOFORGE',
+    title: 'NeoForge',
+    description: 'Сучасний форк Forge (MC 1.20.2+)',
+  },
 ];
+
+/** Підпис поля версії ядра для ядер, що її мають. */
+const CORE_LABELS: Partial<Record<ServerKind, string>> = {
+  PAPER: 'Білд Paper',
+  FABRIC: 'Версія Fabric Loader',
+  FORGE: 'Версія Forge',
+  NEOFORGE: 'Версія NeoForge',
+};
+
+/** Стабільний реліз = лише цифри та крапки (без pre/rc/snapshot/beta). */
+const STABLE_VERSION_PATTERN = /^[0-9.]+$/;
 
 /** Стан майстра — живе між кроками. */
 interface WizardState {
@@ -211,7 +242,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         {
           type: 'button',
           class:
-            'flex-1 rounded-xl border p-3 text-left transition-colors ' +
+            'h-full w-full rounded-xl border p-3 text-left transition-colors ' +
             (selected
               ? 'border-emerald-500 bg-emerald-950/40'
               : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'),
@@ -256,7 +287,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         'div',
         {},
         el('span', { class: 'mb-1 block text-sm text-zinc-400', text: 'Ядро сервера' }),
-        el('div', { class: 'flex gap-2' }, ...kindCards),
+        el('div', { class: 'grid grid-cols-2 gap-2' }, ...kindCards),
       ),
       navButtons(nextButton),
     );
@@ -265,19 +296,147 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
   // ------------------------------------ крок 2: версія гри ↔ версія ядра
 
   function renderStep2(): HTMLElement {
+    const hasCoreVersion = state.kind !== 'VANILLA' && state.kind !== 'SPIGOT';
+
+    let allVersions: string[] = [];
+    let versionsSource: 'online' | 'fallback' | 'loading' = 'loading';
+    let showUnstable = false;
+    const isStable = (v: string): boolean => STABLE_VERSION_PATTERN.test(v);
+
     const versionInput = el('input', {
       class: INPUT_CLASS,
       type: 'text',
       placeholder: 'Завантаження списку…',
       value: state.version,
-      list: 'wizard-game-versions',
       spellcheck: 'false',
       autocomplete: 'off',
     });
-    const versionDatalist = el('datalist', { id: 'wizard-game-versions' });
+    // Власний випадний список замість <datalist>: браузерний неможливо ані
+    // обмежити за висотою, ані відфільтрувати від снапшотів (див. issue у чаті).
+    const dropdown = el('div', {
+      class:
+        'absolute left-0 right-0 top-full z-20 mt-1 hidden max-h-56 overflow-y-auto thin-scroll ' +
+        'rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-2xl',
+    });
+    const comboWrap = el('div', { class: 'relative' }, versionInput, dropdown);
     const versionHint = el('p', { class: 'mt-1 text-xs text-zinc-500', text: '' });
 
-    const coreLabel = state.kind === 'PAPER' ? 'Білд Paper' : 'Версія Fabric Loader';
+    // Mousedown поза комбобоксом миттєво закриває список: інакше відкритий
+    // dropdown перехоплює перший клік по елементах під ним («Назад»/«Далі»).
+    body.addEventListener('mousedown', (event) => {
+      if (!comboWrap.contains(event.target as Node)) hideDropdown();
+    });
+
+    const unstableToggle = el('input', {
+      type: 'checkbox',
+      class: 'accent-emerald-500',
+      onChange: (event) => {
+        showUnstable = (event.target as HTMLInputElement).checked;
+        // Активація чекбокса забирає фокус в інпута — повертаємо, щоб
+        // blur-обробник не закрив список одразу після перемикання.
+        versionInput.focus();
+        refreshDropdown(true);
+        updateVersionHint();
+      },
+    });
+    // Перемикач живе ПРИФІКСОВАНИМ рядком усередині випадного списку: якби він
+    // стояв під інпутом, відкритий список його б перекривав.
+    const unstableToggleRow = el(
+      'label',
+      {
+        class:
+          'sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 ' +
+          'px-3 py-1.5 text-xs text-zinc-400 cursor-pointer',
+      },
+      unstableToggle,
+      'тестові версії (snapshot / pre / rc)',
+    );
+    // mousedown гасимо, щоб інпут не втратив фокус і список не закрився.
+    unstableToggleRow.addEventListener('mousedown', (event) => event.preventDefault());
+
+    function visibleVersions(): string[] {
+      const query = versionInput.value.trim().toLowerCase();
+      return allVersions.filter(
+        (v) => (showUnstable || isStable(v)) && v.toLowerCase().includes(query),
+      );
+    }
+
+    function hideDropdown(): void {
+      dropdown.classList.add('hidden');
+    }
+
+    function refreshDropdown(show: boolean): void {
+      const pool = visibleVersions().slice(0, 30);
+      const items = pool.map((version) => {
+        const item = el('button', {
+          type: 'button',
+          class:
+            'block w-full px-3 py-1.5 text-left text-sm text-zinc-200 hover:bg-emerald-950/50',
+          text: version,
+        });
+        // mousedown, а не click: спрацьовує до blur інпута, інакше список
+        // встигає сховатися раніше за вибір.
+        item.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          pickVersion(version);
+        });
+        return item;
+      });
+      mount(
+        dropdown,
+        unstableToggleRow,
+        ...(items.length > 0
+          ? items
+          : [
+              el('div', {
+                class: 'px-3 py-2 text-xs text-zinc-500',
+                text:
+                  versionsSource === 'loading'
+                    ? 'Список ще завантажується…'
+                    : 'Збігів немає — версію можна ввести вручну',
+              }),
+            ]),
+      );
+      dropdown.classList.toggle('hidden', !show);
+    }
+
+    function pickVersion(version: string): void {
+      versionInput.value = version;
+      state.version = version;
+      state.coreVersion = '';
+      hideDropdown();
+      void loadCoreVersions();
+    }
+
+    function updateVersionHint(): void {
+      if (versionsSource === 'loading') {
+        versionHint.textContent = '';
+        return;
+      }
+      if (versionsSource === 'fallback') {
+        versionHint.textContent =
+          'Немає з’єднання з каталогом версій — список неповний, версію можна ввести вручну.';
+        versionHint.className = 'mt-1 text-xs text-amber-400';
+        return;
+      }
+      const stableCount = allVersions.filter(isStable).length;
+      versionHint.className = 'mt-1 text-xs text-zinc-500';
+      versionHint.textContent = showUnstable
+        ? `Доступно версій: ${allVersions.length} (разом із тестовими)`
+        : `Доступно стабільних версій: ${stableCount} (усього ${allVersions.length})`;
+    }
+
+    versionInput.addEventListener('focus', () => refreshDropdown(true));
+    versionInput.addEventListener('blur', () =>
+      setTimeout(() => {
+        // Якщо фокус повернувся (перемикач у списку) — список лишається відкритим.
+        if (document.activeElement !== versionInput) hideDropdown();
+      }, 150),
+    );
+    versionInput.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'Escape') hideDropdown();
+    });
+
     const coreSelect = el('select', { class: INPUT_CLASS });
     const coreHint = el('p', { class: 'mt-1 text-xs text-zinc-500', text: '' });
 
@@ -305,6 +464,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     /** Тягне версії ядра під конкретну версію гри — саме тут «перевірка сумісності». */
     let coreRequestToken = 0;
     async function loadCoreVersions(): Promise<void> {
+      if (!hasCoreVersion) return; // Vanilla / Spigot — окремої версії ядра немає
       const gameVersion = versionInput.value.trim();
       if (!VERSION_PATTERN.test(gameVersion)) {
         fillCoreSelect([], null, '');
@@ -318,7 +478,11 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         if (result.source === 'fallback') {
           fillCoreSelect([], null, 'Немає з’єднання з каталогом — буде використана остання версія.');
         } else if (result.versions.length === 0) {
-          fillCoreSelect([], null, `Для ${gameVersion} ще немає збірок ${state.kind === 'PAPER' ? 'Paper' : 'Fabric'} — оберіть іншу версію гри.`);
+          fillCoreSelect(
+            [],
+            null,
+            `Для ${gameVersion} ще немає збірок ${KIND_LABELS[state.kind]} — оберіть іншу версію гри.`,
+          );
         } else {
           fillCoreSelect(
             result.versions.slice(0, 50),
@@ -336,11 +500,12 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
       state.coreVersion = (coreSelect as HTMLSelectElement).value;
     });
 
-    // Зміна версії гри → перезапит сумісних версій ядра (з невеликим дебаунсом).
+    // Зміна версії гри → фільтрація списку + перезапит сумісних версій ядра.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     versionInput.addEventListener('input', () => {
       state.version = versionInput.value.trim();
       state.coreVersion = '';
+      refreshDropdown(true);
       if (debounceTimer !== null) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => void loadCoreVersions(), 350);
     });
@@ -349,24 +514,22 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     void api
       .metaVersions(state.kind)
       .then((result) => {
-        mount(versionDatalist, ...result.versions.map((v) => el('option', { value: v })));
-        versionInput.placeholder = result.versions[0] ?? '1.21.8';
-        if (result.source === 'fallback') {
-          versionHint.textContent =
-            'Немає з’єднання з каталогом версій — список неповний, версію можна ввести вручну.';
-          versionHint.className = 'mt-1 text-xs text-amber-400';
-        } else {
-          versionHint.textContent = `Доступно версій: ${result.versions.length} (почніть вводити або оберіть зі списку)`;
-        }
+        allVersions = result.versions;
+        versionsSource = result.source;
+        versionInput.placeholder =
+          result.versions.find((v) => isStable(v)) ?? result.versions[0] ?? '1.21.8';
+        updateVersionHint();
+        refreshDropdown(document.activeElement === versionInput);
         // Якщо версія вже була обрана (повернулися «Назад») — одразу перевіримо ядро.
         if (state.version) void loadCoreVersions();
       })
       .catch(() => {
+        versionsSource = 'fallback';
         versionHint.textContent = 'Не вдалося завантажити список версій — введіть вручну.';
         versionHint.className = 'mt-1 text-xs text-amber-400';
       });
 
-    fillCoreSelect([], null, 'Спершу оберіть версію гри.');
+    if (hasCoreVersion) fillCoreSelect([], null, 'Спершу оберіть версію гри.');
 
     const nextButton = el('button', {
       class: `${BTN.primary} px-6`,
@@ -391,11 +554,20 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
       el(
         'div',
         {},
-        field(`Версія гри (${state.kind === 'PAPER' ? 'Paper' : 'Fabric'})`, versionInput),
-        versionDatalist,
+        // Не <label>: клік по пунктах випадного списку не має фокусувати інпут.
+        el('span', {
+          class: 'mb-1 block text-sm text-zinc-400',
+          text: `Версія гри (${KIND_LABELS[state.kind]})`,
+        }),
+        comboWrap,
         versionHint,
       ),
-      el('div', {}, field(coreLabel, coreSelect), coreHint),
+      hasCoreVersion
+        ? el('div', {}, field(CORE_LABELS[state.kind] ?? 'Версія ядра', coreSelect), coreHint)
+        : el('p', {
+            class: 'text-xs text-zinc-500',
+            text: `${KIND_LABELS[state.kind]} не потребує окремої версії ядра — збірка визначається версією гри.`,
+          }),
       navButtons(nextButton),
     );
   }

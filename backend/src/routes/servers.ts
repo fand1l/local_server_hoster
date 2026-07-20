@@ -57,6 +57,33 @@ const deleteQuerySchema = z.object({
   deleteData: z.enum(['true', 'false']).optional(),
 });
 
+const updateServerSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Ім'я не може бути порожнім")
+      .max(40, "Ім'я задовге (до 40 символів)")
+      .regex(/^[\p{L}\p{N} _.'-]+$/u, "Ім'я містить недопустимі символи")
+      .optional(),
+    memoryMb: z
+      .number({ invalid_type_error: "Об'єм пам'яті має бути числом" })
+      .int()
+      .min(512, "Мінімум 512 МБ пам'яті")
+      .max(1024 * 1024, "Завеликий об'єм пам'яті")
+      .optional(),
+    cpuCores: z
+      .number({ invalid_type_error: 'Кількість ядер має бути числом' })
+      .min(0.5, 'Мінімум пів ядра')
+      .max(256, 'Забагато ядер')
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (patch) => patch.name !== undefined || patch.memoryMb !== undefined || patch.cpuCores !== undefined,
+    { message: 'Немає жодного поля для оновлення' },
+  );
+
 export function registerServerRoutes(app: FastifyInstance, service: ServerService): void {
   app.get('/api/servers', async () => service.listServers());
 
@@ -69,6 +96,12 @@ export function registerServerRoutes(app: FastifyInstance, service: ServerServic
   app.get('/api/servers/:id', async (req) => {
     const { id } = idParamsSchema.parse(req.params);
     return service.getServer(id);
+  });
+
+  app.patch('/api/servers/:id', async (req) => {
+    const { id } = idParamsSchema.parse(req.params);
+    const patch = updateServerSchema.parse(req.body);
+    return service.updateServer(id, patch);
   });
 
   app.post('/api/servers/:id/start', async (req) => {
