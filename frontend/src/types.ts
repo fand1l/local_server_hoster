@@ -88,6 +88,22 @@ export interface PregenAvailability {
   reason: string | null;
 }
 
+export type AddonCategory = 'plugins' | 'mods';
+
+export interface AddonInfo {
+  filename: string;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+export interface AddonsResponse {
+  supported: boolean;
+  category: AddonCategory | null;
+  addons: AddonInfo[];
+  requiresRestart: boolean;
+  warning: string | null;
+}
+
 /** Поля, які можна змінити після створення (PATCH /api/servers/:id). */
 export interface UpdateServerInput {
   name?: string;

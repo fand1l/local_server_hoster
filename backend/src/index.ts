@@ -6,12 +6,14 @@ import { getDocker, isDockerAvailable } from './docker/client.js';
 import { ContainerManager } from './docker/containerManager.js';
 import { ConsoleGateway } from './docker/consoleGateway.js';
 import { VersionCatalog } from './minecraft/versionCatalog.js';
+import { registerAddonRoutes } from './routes/addons.js';
 import { registerConsoleRoute } from './routes/console.ws.js';
 import { registerMetaRoutes } from './routes/meta.js';
 import { registerPlayerRoutes } from './routes/players.js';
 import { registerPropertiesRoutes } from './routes/properties.js';
 import { registerServerRoutes } from './routes/servers.js';
 import { registerSystemRoutes } from './routes/system.js';
+import { AddonService } from './services/addonService.js';
 import { PlayerService } from './services/playerService.js';
 import { PregenMonitor } from './services/pregenMonitor.js';
 import { PregenScheduler } from './services/pregenScheduler.js';
@@ -56,12 +58,14 @@ async function main(): Promise<void> {
   });
   service = new ServerService({ config, repo, containers, gateway, pregen, pregenMonitor, log: app.log });
   const players = new PlayerService({ containers, gateway, log: app.log });
+  const addons = new AddonService({ containers, log: app.log });
 
   registerSystemRoutes(app);
   registerMetaRoutes(app, new VersionCatalog());
   registerServerRoutes(app, service);
   registerPropertiesRoutes(app, service);
   registerPlayerRoutes(app, service, players);
+  registerAddonRoutes(app, service, addons);
   registerConsoleRoute(app, { service, gateway });
 
   if (await isDockerAvailable()) {

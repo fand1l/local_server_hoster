@@ -1,3 +1,4 @@
+import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
@@ -20,6 +21,11 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   // WebSocket-підтримка має бути зареєстрована ДО оголошення ws-роутів.
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 64 * 1024 }, // команди консолі — маленькі
+  });
+
+  // Завантаження плагінів/модів (multipart). Моди бувають великі — ліміт 250 МБ.
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 250 * 1024 * 1024, files: 1 },
   });
 
   // Толерантний JSON-парсер: POST без тіла (start/stop/restart) — це нормально,

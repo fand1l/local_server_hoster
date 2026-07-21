@@ -2,7 +2,8 @@ import { api, ApiError } from '../api';
 import { el, mount } from '../dom';
 import { openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
-import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, pregenBar, statusBadge, withButtonLock } from '../ui';
+import { addonTabLabel, BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, pregenBar, statusBadge, withButtonLock } from '../ui';
+import { renderAddonsPanel } from './addonsPanel';
 import { renderPlayersPanel } from './playersPanel';
 import { ConsoleConnection } from '../ws';
 import type { PregenProgress, PropertyEntry, ServerView } from '../types';
@@ -15,7 +16,7 @@ const CONSOLE_BUFFER_KEEP_CHARS = 350_000;
 /** Сторінка сервера: заголовок з діями + вкладки "Консоль" і "server.properties". */
 export function renderServerDetail(root: HTMLElement, serverId: string): () => void {
   let server: ServerView | null = null;
-  let activeTab: 'console' | 'players' | 'properties' | 'settings' = 'console';
+  let activeTab: 'console' | 'players' | 'addons' | 'properties' | 'settings' = 'console';
 
   // ------------------------------------------------------------- заголовок
 
@@ -444,6 +445,9 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
 
   const consoleTabButton = el('button', { text: 'Консоль' });
   const playersTabButton = el('button', { text: 'Гравці' });
+  // Підпис і видимість вкладки доповнень залежать від ядра (Vanilla — прихована);
+  // проставляємо в applyServer, коли kind відомий. Поки — сховано.
+  const addonsTabButton = el('button', { class: 'hidden', text: 'Плагіни' });
   const propertiesTabButton = el('button', { text: 'server.properties' });
   const settingsTabButton = el('button', { text: 'Параметри' });
   const tabPanelSlot = el('div', {});
@@ -451,6 +455,9 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
   // Вкладка гравців має власний цикл оновлення; тримаємо його cleanup, щоб зупиняти.
   const playersPanel = el('div', {});
   let playersCleanup: (() => void) | null = null;
+  const addonsPanel = el('div', {});
+  let addonsCleanup: (() => void) | null = null;
+  let addonsSupported = false;
 
   function tabClass(active: boolean): string {
     return (
@@ -461,10 +468,13 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     );
   }
 
-  function selectTab(tab: 'console' | 'players' | 'properties' | 'settings'): void {
+  function selectTab(tab: 'console' | 'players' | 'addons' | 'properties' | 'settings'): void {
+    // Вкладка доповнень прихована (Vanilla) — не даємо туди перейти.
+    if (tab === 'addons' && !addonsSupported) tab = 'console';
     activeTab = tab;
     consoleTabButton.className = tabClass(tab === 'console');
     playersTabButton.className = tabClass(tab === 'players');
+    addonsTabButton.className = (addonsSupported ? '' : 'hidden ') + tabClass(tab === 'addons');
     propertiesTabButton.className = tabClass(tab === 'properties');
     settingsTabButton.className = tabClass(tab === 'settings');
 
@@ -479,9 +489,11 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
         ? consolePanel
         : tab === 'players'
           ? playersPanel
-          : tab === 'properties'
-            ? propertiesPanel
-            : settingsPanel;
+          : tab === 'addons'
+            ? addonsPanel
+            : tab === 'properties'
+              ? propertiesPanel
+              : settingsPanel;
     mount(tabPanelSlot, panel);
 
     if (tab === 'properties' && !propertiesLoaded) void loadProperties();
@@ -489,10 +501,14 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     if (tab === 'players' && !playersCleanup) {
       playersCleanup = renderPlayersPanel(playersPanel, serverId, () => server);
     }
+    if (tab === 'addons' && !addonsCleanup) {
+      addonsCleanup = renderAddonsPanel(addonsPanel, serverId);
+    }
   }
 
   consoleTabButton.addEventListener('click', () => selectTab('console'));
   playersTabButton.addEventListener('click', () => selectTab('players'));
+  addonsTabButton.addEventListener('click', () => selectTab('addons'));
   propertiesTabButton.addEventListener('click', () => selectTab('properties'));
   settingsTabButton.addEventListener('click', () => selectTab('settings'));
 
@@ -523,6 +539,7 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
       { class: 'mb-4 flex border-b border-zinc-800' },
       consoleTabButton,
       playersTabButton,
+      addonsTabButton,
       propertiesTabButton,
       settingsTabButton,
     ),
@@ -537,6 +554,19 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
   function applyServer(view: ServerView): void {
     server = view;
     titleEl.textContent = view.name;
+
+    // Вкладка доповнень: підпис і видимість залежать від ядра (Vanilla — прихована).
+    const label = addonTabLabel(view.kind);
+    addonsSupported = label !== null;
+    if (label) addonsTabButton.textContent = label;
+    if (!addonsSupported) {
+      addonsTabButton.className = 'hidden';
+      if (activeTab === 'addons') selectTab('console');
+    } else if (activeTab !== 'addons') {
+      // Оновлюємо клас, щоб кнопка стала видимою (не активна).
+      addonsTabButton.className = tabClass(false);
+    }
+
     mount(badgeSlot, statusBadge(view));
     mount(
       chipsRow,

@@ -167,6 +167,28 @@ export interface PropertyEntry {
   value: string;
 }
 
+/** Категорія доповнень сервера: плагіни (Paper/Spigot) чи моди (Fabric/Forge/NeoForge). */
+export type AddonCategory = 'plugins' | 'mods';
+
+/** Один встановлений .jar-плагін/мод. */
+export interface AddonInfo {
+  filename: string;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+/** Відповідь GET /api/servers/:id/addons. */
+export interface AddonsResponse {
+  /** false для Vanilla (немає завантажувача плагінів/модів). */
+  supported: boolean;
+  /** 'plugins' | 'mods' | null (Vanilla). */
+  category: AddonCategory | null;
+  addons: AddonInfo[];
+  /** true — сервер запущено, зміни застосуються після рестарту. */
+  requiresRestart: boolean;
+  warning: string | null;
+}
+
 /** Повідомлення WebSocket-консолі: сервер → клієнт. */
 export type ConsoleServerMessage =
   | { type: 'log'; data: string }

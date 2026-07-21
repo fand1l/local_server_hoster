@@ -24,6 +24,8 @@ Node.js-бекенд керує серверами в ізольованих Doc
   автоматично, файли світу не зачіпаються)
 - ✅ Керування гравцями: онлайн-список, whitelist / оператори / бани, kick/ban/op одним
   кліком (через RCON без відкриття портів), голови скінів для ліцензійних акаунтів
+- ✅ Плагіни та моди без Docker: перетягніть `.jar` у панель — і він у `plugins/` (Paper/Spigot)
+  або `mods/` (Fabric/Forge/NeoForge); список і видалення на місці
 - ✅ Онлайн/офлайн-режим при створенні (ліцензія) та автоматична прегенерація світу
   через Chunky — з **живою смужкою прогресу** (% / ETA / швидкість) у картці й над консоллю
 - ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — Node.js встановлювати не потрібно
@@ -396,7 +398,20 @@ say Привіт усім!         — повідомлення в чат
 > RCON назовні **не відкривається**, пароль лишається в контейнері. Якщо RCON вимкнено
 > у `server.properties`, команди йдуть у консоль через stdin (без підтвердження виконання).
 
-### 2.6. Редагуйте параметри сервера
+### 2.6. Додавайте плагіни та моди
+
+Вкладка **Плагіни** (Paper/Spigot) або **Моди** (Fabric/Forge/NeoForge) — просто
+**перетягніть `.jar`-файл** у вікно (або натисніть, щоб обрати). Файл потрапляє у
+відповідну теку сервера, а список нижче дозволяє видаляти встановлене. Для Vanilla
+вкладки немає — чисте ядро не підтримує доповнень.
+
+<p align="center"><img src="docs/screenshots/10-addons.png" alt="Вкладка Плагіни з drag-and-drop" width="800"></p>
+
+> [!NOTE]
+> Прямого встановлення з Modrinth поки немає — лише завантаження власних `.jar`.
+> Якщо сервер запущено, після зміни плагінів/модів перезапустіть його.
+
+### 2.7. Редагуйте параметри сервера
 
 Вкладка **Параметри** — зміна налаштувань уже створеного сервера: назва редагується
 будь-коли, а пам'ять і ліміт CPU — коли сервер зупинено (панель перестворює контейнер
@@ -404,7 +419,7 @@ say Привіт усім!         — повідомлення в чат
 
 <p align="center"><img src="docs/screenshots/07-settings.png" alt="Вкладка Параметри" width="800"></p>
 
-### 2.7. Зайдіть у гру
+### 2.8. Зайдіть у гру
 
 | Хто підключається | Адреса у грі (Multiplayer → Add Server) |
 | --- | --- |
@@ -519,6 +534,7 @@ local_server_hoster/
 │       ├── services/
 │       │   ├── serverService.ts      # оркестрація CRUD + життєвого циклу
 │       │   ├── playerService.ts      # гравці: RCON (docker exec) + файли сервера
+│       │   ├── addonService.ts       # плагіни/моди: upload/list/delete у plugins|mods/
 │       │   ├── pregenScheduler.ts    # автопрегенерація Chunky після старту (RCON-проба)
 │       │   └── pregenMonitor.ts      # фоновий парсинг прогресу Chunky з логів → WS/картка
 │       ├── routes/
@@ -634,6 +650,9 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `PUT /api/servers/:id/properties` | Оновити значення; коментарі та невідомі ключі у файлі зберігаються |
 | `GET /api/servers/:id/players` | Гравці: онлайн (RCON) + відомі (файли) + whitelist/ops/bans |
 | `POST /api/servers/:id/players/action` | `{ player, action }` — kick/ban/pardon/op/deop/whitelist-add/whitelist-remove |
+| `GET /api/servers/:id/addons` | Список плагінів/модів (`supported`, `category: plugins\|mods\|null`) |
+| `POST /api/servers/:id/addons` | Завантажити `.jar` (multipart, поле `file`) → `201` |
+| `DELETE /api/servers/:id/addons/:filename` | Видалити плагін/мод → `204` |
 | `GET /api/servers/:id/console` (WS) | Консоль у реальному часі |
 
 Помилки завжди мають форму `{ "error": { "code", "message" } }`

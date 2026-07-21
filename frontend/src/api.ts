@@ -1,4 +1,6 @@
 import type {
+  AddonInfo,
+  AddonsResponse,
   CoreVersionsResult,
   CreateServerInput,
   PlayerAction,
@@ -30,10 +32,11 @@ interface ErrorBody {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  // Content-Type ставимо ЛИШЕ коли реально є тіло: заголовок на порожньому
-  // POST (start/stop/restart) сервер справедливо вважає некоректним запитом.
+  // Content-Type ставимо ЛИШЕ коли є JSON-тіло: заголовок на порожньому POST
+  // (start/stop/restart) сервер справедливо вважає некоректним запитом, а для
+  // FormData браузер сам виставить multipart із boundary — не чіпаємо.
   const headers: Record<string, string> = { ...(init?.headers as Record<string, string>) };
-  if (init?.body !== undefined) {
+  if (init?.body !== undefined && !(init.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -89,6 +92,16 @@ export const api = {
   stopServer: (id: string) => request<ServerView>(`/api/servers/${id}/stop`, { method: 'POST' }),
   restartServer: (id: string) =>
     request<ServerView>(`/api/servers/${id}/restart`, { method: 'POST' }),
+
+  listAddons: (id: string) => request<AddonsResponse>(`/api/servers/${id}/addons`),
+  uploadAddon: (id: string, file: File) => {
+    // FormData сам ставить multipart Content-Type із boundary — заголовок не задаємо.
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return request<AddonInfo>(`/api/servers/${id}/addons`, { method: 'POST', body: form });
+  },
+  deleteAddon: (id: string, filename: string) =>
+    request<void>(`/api/servers/${id}/addons/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
 
   getProperties: (id: string) => request<PropertiesResponse>(`/api/servers/${id}/properties`),
   saveProperties: (id: string, entries: PropertyEntry[]) =>

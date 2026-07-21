@@ -17,6 +17,7 @@
     "package": "node scripts/package.mjs"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.0",
     "@fastify/static": "^9.2.0",
     "@fastify/websocket": "^11.0.1",
     "better-sqlite3": "^12.2.0",

@@ -27,6 +27,18 @@ export const KIND_LABELS: Record<ServerKind, string> = {
   NEOFORGE: 'NeoForge',
 };
 
+/** Категорія доповнень ядра: плагіни (Paper/Spigot), моди (Fabric/Forge/NeoForge) або немає (Vanilla). */
+export function addonCategoryFor(kind: ServerKind): 'plugins' | 'mods' | null {
+  if (kind === 'VANILLA') return null;
+  return kind === 'PAPER' || kind === 'SPIGOT' ? 'plugins' : 'mods';
+}
+
+/** Підпис вкладки доповнень для ядра ("Плагіни"/"Моди") або null для Vanilla. */
+export function addonTabLabel(kind: ServerKind): string | null {
+  const category = addonCategoryFor(kind);
+  return category === 'plugins' ? 'Плагіни' : category === 'mods' ? 'Моди' : null;
+}
+
 /** Бейдж стану: кольорова крапка + підпис; деталі — у title. */
 export function statusBadge(server: ServerView): HTMLElement {
   return el(
