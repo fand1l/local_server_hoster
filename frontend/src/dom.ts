@@ -77,6 +77,17 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * Перезапускає CSS-анімацію на елементі. Потрібно для повторюваних появ
+ * (зміна вкладки тощо), коли елемент лишається у DOM: просто повторно додати
+ * клас недостатньо, треба форснути reflow між remove і add.
+ */
+export function replayAnim(node: HTMLElement, cls: string): void {
+  node.classList.remove(cls);
+  void node.offsetWidth; // reflow — інакше браузер «склеїть» remove+add
+  node.classList.add(cls);
+}
+
 /** Очищає контейнер і монтує в нього нові вузли. */
 export function mount(container: HTMLElement, ...nodes: Child[]): void {
   container.replaceChildren();

@@ -157,17 +157,26 @@ export function formatMemory(memoryMb: number): string {
   return memoryMb >= 1024 ? `${(memoryMb / 1024).toFixed(1)} ГБ` : `${memoryMb} МБ`;
 }
 
-/** Стилі кнопок дій (Tailwind-класи зібрані в одному місці). */
+/**
+ * Стилі кнопок дій (Tailwind-класи зібрані в одному місці).
+ * `transition duration-100` + `active:scale` дають швидкий тактильний відгук
+ * на натиск; `disabled:active:scale-100` вимикає його для неактивних кнопок.
+ */
+const BTN_MOTION =
+  'transition duration-100 active:scale-[0.97] disabled:active:scale-100 ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed';
 export const BTN = {
   primary:
     'rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 ' +
-    'disabled:opacity-40 disabled:cursor-not-allowed transition-colors',
+    BTN_MOTION,
   neutral:
     'rounded-lg bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-200 hover:bg-zinc-700 ' +
-    'ring-1 ring-inset ring-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors',
+    'ring-1 ring-inset ring-zinc-700 ' +
+    BTN_MOTION,
   danger:
     'rounded-lg bg-red-950/60 px-3 py-1.5 text-sm font-medium text-red-300 hover:bg-red-900/70 ' +
-    'ring-1 ring-inset ring-red-900/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors',
+    'ring-1 ring-inset ring-red-900/60 ' +
+    BTN_MOTION,
 } as const;
 
 /**

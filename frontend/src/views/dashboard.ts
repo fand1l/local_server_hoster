@@ -15,6 +15,8 @@ const DEFAULT_MINECRAFT_PORT = 25565;
 export function renderDashboard(root: HTMLElement): () => void {
   let servers: ServerView[] = [];
   let loadFailed = false;
+  // Які картки вже показані — щоб анімувати появу лише нових, а не на кожен полінг.
+  const shownServerIds = new Set<string>();
 
   const grid = el('div', { class: 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' });
 
@@ -75,7 +77,19 @@ export function renderDashboard(root: HTMLElement): () => void {
       );
       return;
     }
-    mount(grid, ...servers.map(serverCard));
+    // Анімуємо появу лише НОВИХ карток (щоб полінг кожні 3 с не блимав усіма).
+    let newIndex = 0;
+    const cards = servers.map((server) => {
+      const card = serverCard(server);
+      if (!shownServerIds.has(server.id)) {
+        card.classList.add('anim-fade-up', 'anim-stagger');
+        card.style.setProperty('--stagger', String(newIndex));
+        newIndex += 1;
+      }
+      return card;
+    });
+    for (const server of servers) shownServerIds.add(server.id);
+    mount(grid, ...cards);
   }
 
   function serverCard(server: ServerView): HTMLElement {
@@ -106,7 +120,7 @@ export function renderDashboard(root: HTMLElement): () => void {
 
     return el(
       'div',
-      { class: 'flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4' },
+      { class: 'lift flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 hover:border-zinc-700' },
       el(
         'div',
         { class: 'flex items-start justify-between gap-2' },

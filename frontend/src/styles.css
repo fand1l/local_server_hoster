@@ -21,3 +21,70 @@
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ---------------------------------------------------------------------------
+   Система анімацій: швидко (120–190 мс) і плавно. Easing зі стриманим
+   «overshoot» для появи, ease-out для зникнення. Стагер карток — через
+   змінну --stagger (inline animation-delay).
+--------------------------------------------------------------------------- */
+:root {
+  --ease-out: cubic-bezier(0.22, 0.9, 0.28, 1); /* швидкий старт, м'яке гальмо */
+}
+
+@keyframes mc-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mc-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mc-fade-up {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mc-scale-in {
+  from { opacity: 0; transform: scale(0.955); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mc-slide-in-right {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+.anim-fade { animation: mc-fade 140ms ease-out both; }
+.anim-fade-out { animation: mc-fade-out 120ms ease-out both; }
+.anim-fade-up { animation: mc-fade-up 170ms var(--ease-out) both; }
+.anim-scale-in { animation: mc-scale-in 150ms var(--ease-out) both; }
+.anim-slide-in { animation: mc-slide-in-right 190ms var(--ease-out) both; }
+
+/* Стагер: кожна наступна картка/рядок стартує з невеликою затримкою. */
+.anim-stagger { animation-delay: calc(var(--stagger, 0) * 45ms); }
+
+/* Плавне «підняття» картки на ховер (доповнює transition-colors). */
+.lift {
+  transition:
+    transform 130ms var(--ease-out),
+    border-color 130ms ease-out,
+    box-shadow 130ms ease-out;
+}
+.lift:hover {
+  transform: translateY(-2px);
+}
+
+/* Доступність: користувачі, що просять менше руху, отримують миттєвий результат. */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade,
+  .anim-fade-out,
+  .anim-fade-up,
+  .anim-scale-in,
+  .anim-slide-in {
+    animation-duration: 1ms;
+  }
+  .lift {
+    transition: none;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}

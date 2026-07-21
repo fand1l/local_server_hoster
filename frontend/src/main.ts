@@ -1,6 +1,6 @@
 import './styles.css';
 import { api } from './api';
-import { el, mount } from './dom';
+import { el, mount, replayAnim } from './dom';
 import { renderDashboard } from './views/dashboard';
 import { renderServerDetail } from './views/serverDetail';
 
@@ -95,6 +95,8 @@ function renderRoute(): void {
     route.view === 'server'
       ? renderServerDetail(viewRoot, route.id)
       : renderDashboard(viewRoot);
+  // Швидка поява при переході між сторінками (дашборд ↔ сервер).
+  replayAnim(viewRoot, 'anim-fade');
 }
 
 window.addEventListener('hashchange', renderRoute);

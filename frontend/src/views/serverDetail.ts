@@ -1,5 +1,5 @@
 import { api, ApiError } from '../api';
-import { el, mount } from '../dom';
+import { el, mount, replayAnim } from '../dom';
 import { openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
 import { addonTabLabel, BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, pregenBar, statusBadge, withButtonLock } from '../ui';
@@ -516,6 +516,8 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
               ? propertiesPanel
               : settingsPanel;
     mount(tabPanelSlot, panel);
+    // Швидка поява вмісту при перемиканні вкладки.
+    replayAnim(tabPanelSlot, 'anim-fade');
 
     // Повторне монтування скидає scrollTop у 0 → консоль показувала б початок.
     // Прокручуємо до найновішого рядка при поверненні на вкладку консолі.

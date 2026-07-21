@@ -26,14 +26,14 @@ const KIND_CLASSES: Record<ToastKind, string> = {
 export function toast(message: string, kind: ToastKind = 'info'): void {
   const node = el('div', {
     class:
-      `pointer-events-auto max-w-sm rounded-lg border px-4 py-2.5 text-sm shadow-xl ` +
-      `transition-opacity duration-300 ${KIND_CLASSES[kind]}`,
+      `anim-slide-in pointer-events-auto max-w-sm rounded-lg border px-4 py-2.5 text-sm shadow-xl ` +
+      `transition-opacity duration-200 ${KIND_CLASSES[kind]}`,
     text: message,
   });
   ensureContainer().append(node);
 
   setTimeout(() => {
     node.style.opacity = '0';
-    setTimeout(() => node.remove(), 350);
+    setTimeout(() => node.remove(), 220);
   }, TOAST_LIFETIME_MS);
 }

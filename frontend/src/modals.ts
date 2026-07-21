@@ -6,12 +6,16 @@ import type { ServerKind, ServerView, SystemInfo } from './types';
 
 /** Загальний каркас модального вікна. Повертає функцію закриття. */
 function openModal(title: string, body: HTMLElement): () => void {
-  const close = (): void => overlay.remove();
+  // Закриття з коротким fade-out фону і вікна, потім видалення з DOM.
+  const close = (): void => {
+    overlay.classList.add('anim-fade-out');
+    setTimeout(() => overlay.remove(), 110);
+  };
 
   const overlay = el(
     'div',
     {
-      class: 'fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4',
+      class: 'anim-fade fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4',
       onClick: (event) => {
         if (event.target === overlay) close(); // клік по фону закриває
       },
@@ -20,7 +24,7 @@ function openModal(title: string, body: HTMLElement): () => void {
       'div',
       {
         class:
-          'w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl ' +
+          'anim-scale-in w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl ' +
           'max-h-[90vh] overflow-y-auto thin-scroll',
       },
       el(
@@ -224,6 +228,8 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
   function render(): void {
     clearError();
     const content = step === 1 ? renderStep1() : step === 2 ? renderStep2() : renderStep3();
+    // Кожен крок м'яко «виїжджає» знизу — швидкий перехід між кроками майстра.
+    content.classList.add('anim-fade-up');
     mount(body, stepIndicator(), content, errorBox);
   }
 
@@ -324,8 +330,8 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     // обмежити за висотою, ані відфільтрувати від снапшотів (див. issue у чаті).
     const dropdown = el('div', {
       class:
-        'absolute left-0 right-0 top-full z-20 mt-1 hidden max-h-56 overflow-y-auto thin-scroll ' +
-        'rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-2xl',
+        'anim-scale-in absolute left-0 right-0 top-full z-20 mt-1 hidden max-h-56 overflow-y-auto ' +
+        'thin-scroll origin-top rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-2xl',
     });
     const comboWrap = el('div', { class: 'relative' }, versionInput, dropdown);
     const versionHint = el('p', { class: 'mt-1 text-xs text-zinc-500', text: '' });
