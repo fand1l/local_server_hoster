@@ -38,15 +38,28 @@ export class FileService {
     return abs;
   }
 
-  /** Додатковий захист від символьних посилань: реальний шлях теж має бути всередині. */
-  private assertRealpathInside(record: ServerRecord, abs: string): void {
+  /**
+   * Головний захист від символьних посилань: РЕАЛЬНИЙ шлях цілі (а якщо ціль ще
+   * не існує — найближчого наявного предка) мусить лишатися в межах теки сервера.
+   * resolveWithin захищає лише лексично (від «../»); це ловить ще й підкладені
+   * всередину теки symlink-и, що вказують назовні (шкідливий плагін/світ або сам
+   * MC-процес, який пише у bind-mount). Викликається в УСІХ операціях над ФС.
+   */
+  private assertContained(record: ServerRecord, abs: string): void {
+    const root = fs.realpathSync(record.dataDir);
+    // Піднімаємось до першого шляху, що реально існує (ціль може ще не бути створена).
+    let probe = abs;
+    while (!fs.existsSync(probe)) {
+      const parent = path.dirname(probe);
+      if (parent === probe) break; // корінь ФС — далі нікуди
+      probe = parent;
+    }
     let real: string;
     try {
-      real = fs.realpathSync(abs);
+      real = fs.realpathSync(probe);
     } catch {
-      return; // шлях ще не існує — нема що перевіряти
+      throw new BadRequestError('Не вдалося перевірити шлях');
     }
-    const root = fs.realpathSync(record.dataDir);
     if (real !== root && !isPathInside(root, real)) {
       throw new BadRequestError('Доступ за символьним посиланням поза текою сервера заборонено');
     }
@@ -55,6 +68,7 @@ export class FileService {
   /** Список вмісту директорії (теки — першими, далі за іменем). */
   list(record: ServerRecord, relPath: string): DirListing {
     const abs = this.resolve(record, relPath);
+    this.assertContained(record, abs);
     let stat: fs.Stats;
     try {
       stat = fs.statSync(abs);
@@ -71,11 +85,17 @@ export class FileService {
         const full = path.join(abs, dirent.name);
         let entryStat: fs.Stats | null = null;
         try {
-          entryStat = fs.statSync(full);
+          // lstat, НЕ statSync: символьні посилання не розіменовуємо — інакше
+          // symlink на теку показувався б як тека і в нього можна було б «зайти»
+          // (навігацію все одно заблокує assertContained, але не спокушаємо).
+          entryStat = fs.lstatSync(full);
         } catch {
           // Битий симлінк тощо — показуємо як файл нульового розміру.
         }
-        const isDir = entryStat?.isDirectory() ?? dirent.isDirectory();
+        // Symlink (навіть на теку) показуємо як файл — заходити в нього не можна.
+        const isDir = entryStat
+          ? entryStat.isDirectory()
+          : dirent.isDirectory() && !dirent.isSymbolicLink();
         return {
           name: dirent.name,
           type: (isDir ? 'directory' : 'file') as FileEntry['type'],
@@ -94,7 +114,7 @@ export class FileService {
   /** Читає текстовий файл (відхиляє двійкові та завеликі — їх лише завантажують). */
   readText(record: ServerRecord, relPath: string): FileTextContent {
     const abs = this.resolve(record, relPath);
-    this.assertRealpathInside(record, abs);
+    this.assertContained(record, abs);
     let stat: fs.Stats;
     try {
       stat = fs.statSync(abs);
@@ -116,6 +136,8 @@ export class FileService {
   /** Зберігає текст у файл (атомарно). Створює батьківські теки за потреби. */
   writeText(record: ServerRecord, relPath: string, content: string): FileTextContent {
     const abs = this.resolve(record, relPath);
+    // ВАЖЛИВО: перевіряємо ДО запису — запис через symlink назовні не відкотиш.
+    this.assertContained(record, abs);
     if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) {
       throw new BadRequestError('Не можна записати текст у теку');
     }
@@ -136,6 +158,8 @@ export class FileService {
       throw new BadRequestError('Некоректне ім’я файлу');
     }
     const dirAbs = this.resolve(record, dirRelPath);
+    // Тека призначення (з урахуванням symlink-ів) має бути в межах теки сервера.
+    this.assertContained(record, dirAbs);
     fs.mkdirSync(dirAbs, { recursive: true });
     const targetRel = path.join(this.relOf(record, dirAbs), filename);
     const target = this.resolve(record, targetRel);
@@ -154,6 +178,7 @@ export class FileService {
       throw new BadRequestError('Некоректне ім’я теки');
     }
     const parent = this.resolve(record, dirRelPath);
+    this.assertContained(record, parent);
     const target = this.resolve(record, path.join(this.relOf(record, parent), name));
     if (fs.existsSync(target)) {
       throw new ConflictError('Файл або тека з такою назвою вже існує');
@@ -170,6 +195,8 @@ export class FileService {
     }
     const abs = this.resolve(record, relPath);
     if (!fs.existsSync(abs)) throw new NotFoundError('Файл або теку не знайдено');
+    // Джерело (з урахуванням symlink-ів) має бути в межах теки; ціль — той самий батько.
+    this.assertContained(record, abs);
     const target = path.join(path.dirname(abs), newName);
     // target обов'язково всередині кореня (той самий батько, валідне ім'я) — але перевіримо.
     this.resolve(record, path.relative(record.dataDir, target));
@@ -194,6 +221,8 @@ export class FileService {
       throw new BadRequestError('Не можна видалити кореневу теку сервера');
     }
     if (!fs.existsSync(abs)) return; // уже немає — ідемпотентність
+    // Не даємо видаляти крізь symlink назовні (rm -rf чужих файлів).
+    this.assertContained(record, abs);
     fs.rmSync(abs, { recursive: true, force: true });
     this.log.info(`Сервер ${record.name}: видалено ${this.relOf(record, abs)}`);
   }
@@ -204,7 +233,7 @@ export class FileService {
     relPath: string,
   ): { absPath: string; filename: string; sizeBytes: number } {
     const abs = this.resolve(record, relPath);
-    this.assertRealpathInside(record, abs);
+    this.assertContained(record, abs);
     let stat: fs.Stats;
     try {
       stat = fs.statSync(abs);

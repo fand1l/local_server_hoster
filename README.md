@@ -592,6 +592,7 @@ local_server_hoster/
 | --- | --- | --- |
 | `MC_HOSTER_PORT` | `8080` | Порт веб-панелі |
 | `MC_HOSTER_HOST` | `127.0.0.1` | Інтерфейс панелі. **Не відкривайте назовні** — авторизації немає |
+| `MC_HOSTER_ALLOWED_HOSTS` | loopback | Білий список значень заголовка `Host` (через кому). Захист від DNS-rebinding; задайте, лише якщо свідомо відкриваєте панель на реальному хості |
 | `MC_HOSTER_DATA_DIR` | `~/.mc-hoster` | БД + директорії серверів (`servers/<id>`) |
 | `MC_HOSTER_GAME_BIND_HOST` | `0.0.0.0` | Куди публікувати ігрові порти (0.0.0.0 = доступно з LAN) |
 | `MC_HOSTER_FRONTEND_DIR` | автопошук | Явний шлях до збірки фронтенду (для нетипових розкладок) |
@@ -684,7 +685,8 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `GET /api/servers/:id/console` (WS) | Консоль у реальному часі |
 
 Помилки завжди мають форму `{ "error": { "code", "message" } }`
-(`400 VALIDATION_ERROR`, `404 NOT_FOUND`, `409 CONFLICT`, `503 DOCKER_UNAVAILABLE`, …).
+(`400 VALIDATION_ERROR`, `403 FORBIDDEN_HOST`/`FORBIDDEN_ORIGIN`, `404 NOT_FOUND`,
+`409 CONFLICT`, `503 DOCKER_UNAVAILABLE`, …).
 
 **WebSocket:** сервер шле `{type:'log',data}`, `{type:'info'|'error',message}`,
 `{type:'status',runtime}`; клієнт шле `{type:'command',data:'say Привіт'}`.
