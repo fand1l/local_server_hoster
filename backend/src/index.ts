@@ -16,6 +16,7 @@ import { registerServerRoutes } from './routes/servers.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { AddonService } from './services/addonService.js';
 import { FileService } from './services/fileService.js';
+import { ModrinthService } from './services/modrinthService.js';
 import { PlayerService } from './services/playerService.js';
 import { PregenMonitor } from './services/pregenMonitor.js';
 import { PregenScheduler } from './services/pregenScheduler.js';
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   service = new ServerService({ config, repo, containers, gateway, pregen, pregenMonitor, log: app.log });
   const players = new PlayerService({ containers, gateway, log: app.log });
   const addons = new AddonService({ containers, log: app.log });
+  const modrinth = new ModrinthService({ addons, log: app.log });
   const fileService = new FileService({ log: app.log });
 
   registerSystemRoutes(app);
@@ -68,7 +70,7 @@ async function main(): Promise<void> {
   registerServerRoutes(app, service);
   registerPropertiesRoutes(app, service);
   registerPlayerRoutes(app, service, players);
-  registerAddonRoutes(app, service, addons);
+  registerAddonRoutes(app, service, addons, modrinth);
   registerFileRoutes(app, service, fileService);
   registerConsoleRoute(app, { service, gateway });
 

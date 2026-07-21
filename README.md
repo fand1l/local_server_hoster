@@ -24,8 +24,8 @@ Node.js-бекенд керує серверами в ізольованих Doc
   автоматично, файли світу не зачіпаються)
 - ✅ Керування гравцями: онлайн-список, whitelist / оператори / бани, kick/ban/op одним
   кліком (через RCON без відкриття портів), голови скінів для ліцензійних акаунтів
-- ✅ Плагіни та моди без Docker: перетягніть `.jar` у панель — і він у `plugins/` (Paper/Spigot)
-  або `mods/` (Fabric/Forge/NeoForge); список і видалення на місці
+- ✅ Плагіни та моди з **Modrinth** прямо в панелі: пошук сумісного контенту під ядро+версію
+  та встановлення в один клік; або перетягніть власний `.jar` — список і видалення на місці
 - ✅ Файловий менеджер: навігація текою сервера, редагування конфігів прямо в браузері,
   завантаження/вивантаження, теки, перейменування, видалення — без термінала й Docker
 - ✅ Онлайн/офлайн-режим при створенні (ліцензія) та автоматична прегенерація світу
@@ -413,18 +413,24 @@ say Привіт усім!         — повідомлення в чат
 > Усі операції строго в межах теки сервера (захист від виходу за межі). Двійкові
 > й дуже великі файли не редагуються як текст — їх можна лише завантажити.
 
-### 2.7. Додавайте плагіни та моди
+### 2.7. Додавайте плагіни та моди з Modrinth
 
-Вкладка **Плагіни** (Paper/Spigot) або **Моди** (Fabric/Forge/NeoForge) — просто
-**перетягніть `.jar`-файл** у вікно (або натисніть, щоб обрати). Файл потрапляє у
-відповідну теку сервера, а список нижче дозволяє видаляти встановлене. Для Vanilla
-вкладки немає — чисте ядро не підтримує доповнень.
+Вкладка **Плагіни** (Paper/Spigot) або **Моди** (Fabric/Forge/NeoForge) — це магазин
+контенту прямо в панелі. **Знайдіть** плагін/мод на [Modrinth](https://modrinth.com)
+(порожній запит показує популярне) і натисніть **Встановити** — панель сама завантажить
+останню сумісну версію у відповідну теку сервера. Видача фільтрується під ваше ядро й
+версію гри, тож несумісне не з'явиться.
 
-<p align="center"><img src="docs/screenshots/10-addons.png" alt="Вкладка Плагіни з drag-and-drop" width="800"></p>
+<p align="center"><img src="docs/screenshots/12-modrinth.png" alt="Пошук і встановлення плагінів з Modrinth" width="800"></p>
+
+Список **встановлених** нижче дозволяє видаляти зайве, а як запасний варіант можна
+**перетягнути власний `.jar`** (наприклад, приватну збірку, якої немає на Modrinth).
+Для Vanilla вкладки немає — чисте ядро не підтримує доповнень.
 
 > [!NOTE]
-> Прямого встановлення з Modrinth поки немає — лише завантаження власних `.jar`.
-> Якщо сервер запущено, після зміни плагінів/модів перезапустіть його.
+> Завантаження — лише з офіційного CDN Modrinth. Якщо сервер запущено, після зміни
+> плагінів/модів перезапустіть його. Модпаки тут не встановлюються: вони переозначають
+> увесь сервер (версію, лоадер, набір модів) — це окремий сценарій (краще новий сервер).
 
 ### 2.8. Редагуйте параметри сервера
 
@@ -550,6 +556,7 @@ local_server_hoster/
 │       │   ├── serverService.ts      # оркестрація CRUD + життєвого циклу
 │       │   ├── playerService.ts      # гравці: RCON (docker exec) + файли сервера
 │       │   ├── addonService.ts       # плагіни/моди: upload/list/delete у plugins|mods/
+│       │   ├── modrinthService.ts    # пошук і встановлення контенту з Modrinth (SSRF-allowlist)
 │       │   ├── fileService.ts        # файловий менеджер: browse/read/write/upload/mkdir/rename/rm (path-safe)
 │       │   ├── pregenScheduler.ts    # автопрегенерація Chunky після старту (RCON-проба)
 │       │   └── pregenMonitor.ts      # фоновий парсинг прогресу Chunky з логів → WS/картка
@@ -575,7 +582,7 @@ local_server_hoster/
 │           ├── serverDetail.ts# вкладки: консоль / гравці / файли / плагіни / параметри
 │           ├── playersPanel.ts# онлайн-гравці, whitelist/ops/bans, дії через RCON
 │           ├── fileManager.ts # файловий менеджер: навігація, редактор, upload, drag-drop
-│           └── addonsPanel.ts # плагіни/моди: drag-drop .jar, список, видалення
+│           └── addonsPanel.ts # плагіни/моди: пошук+встановлення з Modrinth, свій .jar, список
 └── docker/
     └── custom-jre/            # альтернатива: чистий JRE + свій server.jar
         ├── Dockerfile
@@ -672,7 +679,9 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `GET /api/servers/:id/players` | Гравці: онлайн (RCON) + відомі (файли) + whitelist/ops/bans |
 | `POST /api/servers/:id/players/action` | `{ player, action }` — kick/ban/pardon/op/deop/whitelist-add/whitelist-remove |
 | `GET /api/servers/:id/addons` | Список плагінів/модів (`supported`, `category: plugins\|mods\|null`) |
-| `POST /api/servers/:id/addons` | Завантажити `.jar` (multipart, поле `file`) → `201` |
+| `GET /api/servers/:id/addons/search?q=&offset=` | Пошук на Modrinth під ядро+версію (`hits`, `source: online\|offline`) |
+| `POST /api/servers/:id/addons/install` | Встановити `{ projectId }` з Modrinth (остання сумісна версія) → `201` |
+| `POST /api/servers/:id/addons` | Завантажити власний `.jar` (multipart, поле `file`) → `201` |
 | `DELETE /api/servers/:id/addons/:filename` | Видалити плагін/мод → `204` |
 | `GET /api/servers/:id/files?path=` | Вміст теки: `{ path, entries: [{name,type,sizeBytes,modifiedAt}] }` (теки, потім файли) |
 | `GET /api/servers/:id/files/content?path=` | Текст файлу `{ path, content }`; бінарні та >2 МБ → `400` |

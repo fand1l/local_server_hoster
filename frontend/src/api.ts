@@ -1,5 +1,6 @@
 import type {
   AddonInfo,
+  AddonSearchResponse,
   AddonsResponse,
   DirListing,
   FileEntry,
@@ -105,6 +106,18 @@ export const api = {
   },
   deleteAddon: (id: string, filename: string) =>
     request<void>(`/api/servers/${id}/addons/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+
+  /** Пошук контенту на Modrinth (сумісного з ядром+версією сервера). */
+  searchAddons: (id: string, q: string, offset = 0) =>
+    request<AddonSearchResponse>(
+      `/api/servers/${id}/addons/search?q=${encodeURIComponent(q)}&offset=${offset}`,
+    ),
+  /** Встановити проєкт Modrinth (остання сумісна версія → тека plugins/mods). */
+  installAddon: (id: string, projectId: string) =>
+    request<AddonInfo>(`/api/servers/${id}/addons/install`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    }),
 
   // --- Файловий менеджер ---
   listFiles: (id: string, path: string) =>

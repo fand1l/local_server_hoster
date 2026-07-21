@@ -212,6 +212,29 @@ export interface AddonsResponse {
   warning: string | null;
 }
 
+/** Один результат пошуку контенту на Modrinth. */
+export interface AddonSearchHit {
+  /** Ідентифікатор проєкту Modrinth (для встановлення). */
+  projectId: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  downloads: number;
+  /** URL іконки проєкту або null. */
+  iconUrl: string | null;
+}
+
+/** Відповідь GET /api/servers/:id/addons/search. */
+export interface AddonSearchResponse {
+  hits: AddonSearchHit[];
+  total: number;
+  offset: number;
+  category: AddonCategory;
+  /** 'online' — з Modrinth; 'offline' — немає з’єднання (hits порожній). */
+  source: 'online' | 'offline';
+}
+
 /** Повідомлення WebSocket-консолі: сервер → клієнт. */
 export type ConsoleServerMessage =
   | { type: 'log'; data: string }

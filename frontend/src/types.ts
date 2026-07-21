@@ -120,6 +120,25 @@ export interface AddonsResponse {
   warning: string | null;
 }
 
+/** Результат пошуку контенту на Modrinth. */
+export interface AddonSearchHit {
+  projectId: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  downloads: number;
+  iconUrl: string | null;
+}
+
+export interface AddonSearchResponse {
+  hits: AddonSearchHit[];
+  total: number;
+  offset: number;
+  category: AddonCategory;
+  source: 'online' | 'offline';
+}
+
 /** Поля, які можна змінити після створення (PATCH /api/servers/:id). */
 export interface UpdateServerInput {
   name?: string;
