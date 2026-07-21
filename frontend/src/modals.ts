@@ -306,6 +306,10 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     let allVersions: string[] = [];
     let versionsSource: 'online' | 'fallback' | 'loading' = 'loading';
     let showUnstable = false;
+    // Фільтруємо список за текстом ЛИШЕ коли користувач набирає. Коли в полі вже
+    // стоїть обрана версія (напр. «26.2») — при повторному відкритті показуємо всі,
+    // інакше вибрана версія «залипає» фільтром і не дає обрати іншу, поки не стерти.
+    let filtering = false;
     const isStable = (v: string): boolean => STABLE_VERSION_PATTERN.test(v);
 
     const versionInput = el('input', {
@@ -360,7 +364,8 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     unstableToggleRow.addEventListener('mousedown', (event) => event.preventDefault());
 
     function visibleVersions(): string[] {
-      const query = versionInput.value.trim().toLowerCase();
+      // Порожній query, коли не в режимі набору → показуємо весь список.
+      const query = filtering ? versionInput.value.trim().toLowerCase() : '';
       return allVersions.filter(
         (v) => (showUnstable || isStable(v)) && v.toLowerCase().includes(query),
       );
@@ -372,11 +377,15 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
 
     function refreshDropdown(show: boolean): void {
       const pool = visibleVersions().slice(0, 30);
+      const current = versionInput.value.trim();
       const items = pool.map((version) => {
+        const selected = version === current;
         const item = el('button', {
           type: 'button',
           class:
-            'block w-full px-3 py-1.5 text-left text-sm text-zinc-200 hover:bg-emerald-950/50',
+            'block w-full px-3 py-1.5 text-left text-sm hover:bg-emerald-950/50 ' +
+            // Підсвічуємо поточний вибір, щоб було видно, де ти у списку.
+            (selected ? 'bg-emerald-950/40 font-medium text-emerald-300' : 'text-zinc-200'),
           text: version,
         });
         // mousedown, а не click: спрацьовує до blur інпута, інакше список
@@ -409,6 +418,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
       versionInput.value = version;
       state.version = version;
       state.coreVersion = '';
+      filtering = false; // вибір завершено — наступне відкриття покаже весь список
       hideDropdown();
       void loadCoreVersions();
     }
@@ -431,7 +441,24 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         : `Доступно стабільних версій: ${stableCount} (усього ${allVersions.length})`;
     }
 
-    versionInput.addEventListener('focus', () => refreshDropdown(true));
+    // Відкриваємо список у режимі перегляду: повний список + виділений текст,
+    // щоб перший символ замінив стару версію (не треба стирати вручну).
+    function openForBrowsing(): void {
+      filtering = false;
+      // Виділення відкладаємо у наступний кадр: якщо викликати select() прямо тут,
+      // браузер після обробки focus сам ставить каретку в кінець і скидає виділення.
+      requestAnimationFrame(() => {
+        if (document.activeElement === versionInput) versionInput.select();
+      });
+      refreshDropdown(true);
+    }
+
+    versionInput.addEventListener('focus', openForBrowsing);
+    // Клік потрібен окремо: після вибору пункту поле лишається сфокусованим
+    // (mousedown по пункту гаситься preventDefault), тож focus повторно НЕ
+    // спрацьовує — і без цього обробника список не перевідкривався б зі свіжим
+    // значенням (саме той баг, коли обрана версія «залипала» фільтром).
+    versionInput.addEventListener('click', openForBrowsing);
     versionInput.addEventListener('blur', () =>
       setTimeout(() => {
         // Якщо фокус повернувся (перемикач у списку) — список лишається відкритим.
@@ -510,6 +537,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     versionInput.addEventListener('input', () => {
       state.version = versionInput.value.trim();
       state.coreVersion = '';
+      filtering = true; // почали набирати — тепер текст фільтрує список
       refreshDropdown(true);
       if (debounceTimer !== null) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => void loadCoreVersions(), 350);
