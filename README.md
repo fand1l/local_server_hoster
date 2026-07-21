@@ -414,8 +414,8 @@ say Привіт усім!         — повідомлення в чат
 ### 2.7. Редагуйте параметри сервера
 
 Вкладка **Параметри** — зміна налаштувань уже створеного сервера: назва редагується
-будь-коли, а пам'ять і ліміт CPU — коли сервер зупинено (панель перестворює контейнер
-із новими лімітами; файли світу лежать на диску і не зачіпаються):
+будь-коли, а пам'ять, ліміт CPU і порт — коли сервер зупинено (панель перестворює
+контейнер із новими параметрами; файли світу лежать на диску і не зачіпаються):
 
 <p align="center"><img src="docs/screenshots/07-settings.png" alt="Вкладка Параметри" width="800"></p>
 
@@ -641,7 +641,7 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `GET /api/servers` | Список серверів + живий стан (`runtime: creating/running/stopped/error/unknown`) |
 | `POST /api/servers` | Створити: `{ name, kind, version, coreVersion?, hostPort, memoryMb, cpuCores?, onlineMode, pregenRadius?, acceptEula: true, autoStart }` → `201`, провізія у фоні |
 | `GET /api/servers/:id` | Один сервер |
-| `PATCH /api/servers/:id` | Змінити `{ name?, memoryMb?, cpuCores? }`; ресурси — лише на зупиненому (контейнер перестворюється) |
+| `PATCH /api/servers/:id` | Змінити `{ name?, memoryMb?, cpuCores?, hostPort? }`; ресурси/порт — лише на зупиненому (контейнер перестворюється) |
 | `POST /api/servers/:id/start` | Запуск (перестворює контейнер після помилки/видалення вручну) |
 | `POST /api/servers/:id/stop` | Graceful stop (до 60 с на збереження світу) |
 | `POST /api/servers/:id/restart` | Перезапуск |

@@ -308,9 +308,9 @@ export class ServerService {
   }
 
   /**
-   * Редагування сервера: назва — будь-коли; пам'ять/CPU — лише коли сервер
-   * зупинено (зміна лімітів вимагає перестворення контейнера, бо MEMORY —
-   * це env, який образ читає на старті).
+   * Редагування сервера: назва — будь-коли; пам'ять / CPU / порт — лише коли
+   * сервер зупинено (усі три застосовуються при СТВОРЕННІ контейнера: MEMORY —
+   * env, ліміт CPU — NanoCpus, порт — PortBindings), тож потребують перестворення.
    */
   async updateServer(id: string, patch: UpdateServerInput): Promise<ServerView> {
     const record = this.mustGet(id);
@@ -329,6 +329,23 @@ export class ServerService {
     const memoryChanged = patch.memoryMb !== undefined && patch.memoryMb !== record.memoryMb;
     const cpuChanged =
       patch.cpuCores !== undefined && (patch.cpuCores ?? null) !== record.cpuCores;
+    const portChanged = patch.hostPort !== undefined && patch.hostPort !== record.hostPort;
+    const needsRecreate = memoryChanged || cpuChanged || portChanged;
+
+    // Валідація нового порту (унікальність серед серверів, не порт панелі, вільний).
+    if (portChanged) {
+      const port = patch.hostPort!;
+      if (port === this.config.port) {
+        throw new ConflictError(`Порт ${port} зайнятий самою панеллю`);
+      }
+      const byPort = this.repo.findByPort(port);
+      if (byPort && byPort.id !== id) {
+        throw new ConflictError(`Порт ${port} уже закріплено за іншим сервером`);
+      }
+      if (!(await isTcpPortFree(port, this.config.gameBindHost))) {
+        throw new ConflictError(`Порт ${port} уже зайнятий іншим процесом на цьому комп'ютері`);
+      }
+    }
 
     if (memoryChanged || cpuChanged) {
       const totalMemoryMb = Math.floor(os.totalmem() / (1024 * 1024));
@@ -341,14 +358,14 @@ export class ServerService {
       if (patch.cpuCores != null && patch.cpuCores > cpuCount) {
         throw new ConflictError(`Запитано ${patch.cpuCores} ядер, а на машині всього ${cpuCount}`);
       }
+    }
 
-      // Ліміти застосовуються при створенні контейнера → міняти можна лише на зупиненому.
-      if (record.containerId) {
-        await assertDockerAvailable();
-        const state = await this.containers.inspectState(record.containerId);
-        if (state.running) {
-          throw new ConflictError('Зупиніть сервер, щоб змінити ресурси (потрібне перестворення контейнера)');
-        }
+    // Перестворення застосовується лише на зупиненому сервері.
+    if (needsRecreate && record.containerId) {
+      await assertDockerAvailable();
+      const state = await this.containers.inspectState(record.containerId);
+      if (state.running) {
+        throw new ConflictError('Зупиніть сервер, щоб змінити ресурси або порт (потрібне перестворення контейнера)');
       }
     }
 
@@ -356,15 +373,16 @@ export class ServerService {
       ...(newName ? { name: newName } : {}),
       ...(patch.memoryMb !== undefined ? { memoryMb: patch.memoryMb } : {}),
       ...(patch.cpuCores !== undefined ? { cpuCores: patch.cpuCores ?? null } : {}),
+      ...(patch.hostPort !== undefined ? { hostPort: patch.hostPort } : {}),
     });
     if (!updated) throw new NotFoundError(`Сервер з id=${id} не знайдено`);
 
-    // Перестворюємо контейнер із новими лімітами (світ у bind-mount — нічого не втрачається).
-    if ((memoryChanged || cpuChanged) && updated.containerId) {
+    // Перестворюємо контейнер із новими параметрами (світ у bind-mount — нічого не втрачається).
+    if (needsRecreate && updated.containerId) {
       await this.containers.removeIfExists(updated.containerId);
       const containerId = await this.containers.createServerContainer(updated, this.config.gameBindHost);
       this.repo.update(id, { containerId });
-      this.log.info(`Сервер ${updated.name} (${id}): контейнер перестворено з новими лімітами`);
+      this.log.info(`Сервер ${updated.name} (${id}): контейнер перестворено з новими параметрами`);
     }
 
     return this.toView(this.mustGet(id), await isDockerAvailable());

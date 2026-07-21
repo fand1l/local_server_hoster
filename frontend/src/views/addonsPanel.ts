@@ -144,8 +144,9 @@ export function renderAddonsPanel(root: HTMLElement, serverId: string): () => vo
   }
 
   function render(): void {
-    const children: (HTMLElement | null)[] = [dropZone()];
+    const children: (HTMLElement | null)[] = [];
 
+    // Попередження про рестарт — угорі, як на інших вкладках (єдиний стиль).
     if (data?.requiresRestart) {
       children.push(
         el('p', {
@@ -157,6 +158,8 @@ export function renderAddonsPanel(root: HTMLElement, serverId: string): () => vo
     if (loadError) {
       children.push(el('p', { class: 'text-sm text-red-400', text: loadError }));
     }
+
+    children.push(dropZone());
 
     if (data) {
       const count = data.addons.length;

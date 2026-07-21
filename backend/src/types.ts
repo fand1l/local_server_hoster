@@ -92,6 +92,8 @@ export interface UpdateServerInput {
   memoryMb?: number;
   /** null — зняти ліміт CPU. */
   cpuCores?: number | null;
+  /** Порт гри на хості (зміна перестворює контейнер). */
+  hostPort?: number;
 }
 
 /** Вхідні дані створення сервера (після zod-валідації). */

@@ -109,6 +109,7 @@ export interface UpdateServerInput {
   name?: string;
   memoryMb?: number;
   cpuCores?: number | null;
+  hostPort?: number;
 }
 
 export interface VersionListResult {

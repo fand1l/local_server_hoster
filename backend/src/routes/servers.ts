@@ -85,9 +85,19 @@ const updateServerSchema = z
       .max(256, 'Забагато ядер')
       .nullable()
       .optional(),
+    hostPort: z
+      .number({ invalid_type_error: 'Порт має бути числом' })
+      .int()
+      .min(1024, 'Використовуйте порти від 1024')
+      .max(65535, 'Порт має бути не більшим за 65535')
+      .optional(),
   })
   .refine(
-    (patch) => patch.name !== undefined || patch.memoryMb !== undefined || patch.cpuCores !== undefined,
+    (patch) =>
+      patch.name !== undefined ||
+      patch.memoryMb !== undefined ||
+      patch.cpuCores !== undefined ||
+      patch.hostPort !== undefined,
     { message: 'Немає жодного поля для оновлення' },
   );
 

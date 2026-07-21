@@ -330,12 +330,21 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
         // Повзунок на максимумі = «без ліміту CPU» (надсилаємо null).
         let cpuValue = current.cpuCores === null ? cpuCount : Math.min(current.cpuCores, cpuCount);
 
-        const nameInput = el('input', {
-          class:
-            'w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 ' +
-            'focus:border-emerald-500 focus:outline-none',
-          type: 'text',
-          value: current.name,
+        const inputClass =
+          'w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 ' +
+          'focus:border-emerald-500 focus:outline-none disabled:opacity-50';
+
+        const nameInput = el('input', { class: inputClass, type: 'text', value: current.name });
+
+        // Порт — як і ресурси, застосовується при створенні контейнера, тож
+        // редагується лише на зупиненому сервері.
+        const portInput = el('input', {
+          class: inputClass,
+          type: 'number',
+          min: '1024',
+          max: '65535',
+          value: String(current.hostPort),
+          disabled: resourcesLocked,
         });
 
         const formatGb = (mb: number): string =>
@@ -386,6 +395,12 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
               if (!resourcesLocked) {
                 patch.memoryMb = memoryMb;
                 patch.cpuCores = cpuValue >= cpuCount ? null : cpuValue;
+                const port = Number(portInput.value);
+                if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+                  toast('Порт має бути числом від 1024 до 65535', 'error');
+                  return;
+                }
+                patch.hostPort = port;
               }
               applyServer(await api.updateServer(serverId, patch));
               toast('Налаштування збережено', 'success');
@@ -402,11 +417,11 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
             ? el('p', {
                 class:
                   'rounded-lg border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-300',
-                text: 'Сервер запущено: назву можна змінити зараз, а ресурси — лише після зупинки (потрібне перестворення контейнера).',
+                text: 'Сервер запущено: назву можна змінити зараз, а ресурси й порт — лише після зупинки (потрібне перестворення контейнера).',
               })
             : el('p', {
                 class: 'text-xs text-zinc-500',
-                text: 'Зміна ресурсів перестворює контейнер із новими лімітами. Файли світу при цьому не зачіпаються.',
+                text: 'Зміна ресурсів або порту перестворює контейнер із новими параметрами. Файли світу при цьому не зачіпаються.',
               }),
           el(
             'label',
@@ -435,6 +450,12 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
               cpuLabel,
             ),
             cpuSlider,
+          ),
+          el(
+            'label',
+            { class: 'block' },
+            el('span', { class: 'mb-1 block text-sm text-zinc-400', text: 'Порт на цьому комп’ютері' }),
+            portInput,
           ),
           saveButton,
         );
@@ -495,6 +516,10 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
               ? propertiesPanel
               : settingsPanel;
     mount(tabPanelSlot, panel);
+
+    // Повторне монтування скидає scrollTop у 0 → консоль показувала б початок.
+    // Прокручуємо до найновішого рядка при поверненні на вкладку консолі.
+    if (tab === 'console') consoleOutput.scrollTop = consoleOutput.scrollHeight;
 
     if (tab === 'properties' && !propertiesLoaded) void loadProperties();
     if (tab === 'settings') renderSettings();

@@ -27,6 +27,7 @@ export interface ServerPatch {
   name?: string;
   memoryMb?: number;
   cpuCores?: number | null;
+  hostPort?: number;
   pregenDone?: boolean;
   containerId?: string | null;
   status?: ProvisionStatus;
@@ -117,6 +118,7 @@ export class ServerRepository {
       name: 'name',
       memoryMb: 'memory_mb',
       cpuCores: 'cpu_cores',
+      hostPort: 'host_port',
       pregenDone: 'pregen_done',
       containerId: 'container_id',
       status: 'status',
