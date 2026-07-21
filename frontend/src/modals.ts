@@ -550,7 +550,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         allVersions = result.versions;
         versionsSource = result.source;
         versionInput.placeholder =
-          result.versions.find((v) => isStable(v)) ?? result.versions[0] ?? '1.21.8';
+          result.versions.find((v) => isStable(v)) ?? result.versions[0] ?? '26.2';
         updateVersionHint();
         refreshDropdown(document.activeElement === versionInput);
         // Якщо версія вже була обрана (повернулися «Назад») — одразу перевіримо ядро.
@@ -570,7 +570,7 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
       onClick: () => {
         const version = versionInput.value.trim();
         if (!VERSION_PATTERN.test(version)) {
-          showError('Вкажіть коректну версію гри (наприклад, 1.21.8)');
+          showError('Вкажіть коректну версію гри (наприклад, 26.2 або 1.21.8)');
           versionInput.focus();
           return;
         }

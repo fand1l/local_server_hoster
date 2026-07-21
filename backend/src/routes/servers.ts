@@ -22,7 +22,7 @@ const createServerSchema = z.object({
   version: z
     .string()
     .trim()
-    .min(1, 'Вкажіть версію (наприклад, 1.21.8 або LATEST)')
+    .min(1, 'Вкажіть версію (наприклад, 26.2 або 1.21.8)')
     .max(32)
     .regex(/^[A-Za-z0-9._-]+$/, 'Недопустимий формат версії'),
   coreVersion: z

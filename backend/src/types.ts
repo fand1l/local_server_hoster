@@ -32,7 +32,7 @@ export interface ServerRecord {
   id: string;
   name: string;
   kind: ServerKind;
-  /** Версія Minecraft ("1.21.8", "LATEST" тощо) — передається в образ як VERSION. */
+  /** Версія Minecraft ("26.2", "1.21.8", "LATEST" тощо) — передається в образ як VERSION. */
   version: string;
   /**
    * Версія ядра: для PAPER — номер білда (env PAPER_BUILD),

@@ -25,25 +25,32 @@ export const MANAGED_LABEL = 'mc-hoster.managed';
 export const SERVER_ID_LABEL = 'mc-hoster.server-id';
 
 /**
- * Підбирає тег образу з відповідною версією Java під версію Minecraft:
+ * Підбирає тег образу з відповідною версією Java під версію Minecraft.
+ *
+ * Стара схема нумерації "1.MINOR.PATCH":
  *   до 1.16.x включно — Java 8;  1.17.x — Java 17 (мінімум 16);
  *   1.18–1.20.4 — Java 17;       1.20.5–1.21.x — Java 21.
- * Для новіших за 1.21 і для нечислових версій (LATEST, снапшоти, нові схеми
- * нумерації) беремо latest — цей тег itzg завжди несе найновішу Java.
+ *
+ * Нова схема Mojang (з кінця 2025 року, після 1.21.x — рік-орієнтована:
+ * "26.1", "26.2", …) вимагає Java 21+, тож для неї беремо latest.
+ * Так само latest для нечислових версій (LATEST, снапшоти) — цей тег itzg
+ * завжди несе найновішу підтримувану Java.
  */
 export function resolveImageForVersion(version: string): string {
-  const match = /^1\.(\d+)(?:\.(\d+))?$/.exec(version.trim());
-  if (!match) return `${IMAGE_REPO}:latest`;
+  const trimmed = version.trim();
+  const legacy = /^1\.(\d+)(?:\.(\d+))?$/.exec(trimmed);
 
-  const minor = Number(match[1]);
-  const patch = Number(match[2] ?? '0');
+  // Нова схема ("26.2", "26.1.1") або будь-що нечислове → latest (новітня Java).
+  if (!legacy) return `${IMAGE_REPO}:latest`;
+
+  const minor = Number(legacy[1]);
+  const patch = Number(legacy[2] ?? '0');
 
   let tag: string;
   if (minor <= 16) tag = 'java8-multiarch';
   else if (minor <= 19) tag = 'java17';
   else if (minor === 20) tag = patch >= 5 ? 'java21' : 'java17';
-  else if (minor === 21) tag = 'java21';
-  else tag = 'latest'; // майбутні версії можуть вимагати новішої Java
+  else tag = 'java21'; // 1.21.x
 
   return `${IMAGE_REPO}:${tag}`;
 }

@@ -472,7 +472,7 @@ sequenceDiagram
 | Питання | Рішення |
 | --- | --- |
 | Звідки береться jar сервера | Образ `itzg/minecraft-server` завантажує його сам (`TYPE`, `VERSION` у env). Панель лише тягне образ через Docker API |
-| Версія Java | `resolveImageForVersion()`: ≤1.16 → `java8-multiarch`, 1.17–1.20.4 → `java17`, 1.20.5+ → `java21`, нечислові (`LATEST`) → `latest` |
+| Версія Java | `resolveImageForVersion()`: ≤1.16 → `java8-multiarch`, 1.17–1.20.4 → `java17`, 1.20.5–1.21.x → `java21`. Нова рік-орієнтована схема Mojang (після 1.21.x: `26.1`, `26.2`, …) і нечислові версії (`LATEST`, снапшоти) → `latest` (новітня Java) |
 | Ізоляція | Один сервер = один контейнер: ліміт пам'яті, свій порт, RestartPolicy `unless-stopped` |
 | Файли сервера | Bind-mount `<dataRoot>/servers/<id>` → `/data` контейнера |
 | Коректна зупинка | `docker stop` з таймаутом 60 с; всередині образу `mc-server-runner` перетворює SIGTERM на команду `stop` (світ зберігається) |
