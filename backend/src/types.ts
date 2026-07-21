@@ -235,6 +235,20 @@ export interface AddonSearchResponse {
   source: 'online' | 'offline';
 }
 
+/**
+ * Результат встановлення з Modrinth: головний файл + автоматично встановлені
+ * обов'язкові залежності + попередження (незадоволені залежності тощо).
+ */
+export interface AddonInstallResult {
+  main: AddonInfo;
+  /** Усі встановлені файли (головний + залежності), у порядку встановлення. */
+  installed: AddonInfo[];
+  /** Скільки обов'язкових залежностей встановлено автоматично. */
+  dependencyCount: number;
+  /** Незадоволені обов'язкові залежності та інші застереження (для UI). */
+  warnings: string[];
+}
+
 /** Повідомлення WebSocket-консолі: сервер → клієнт. */
 export type ConsoleServerMessage =
   | { type: 'log'; data: string }

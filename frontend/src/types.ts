@@ -139,6 +139,14 @@ export interface AddonSearchResponse {
   source: 'online' | 'offline';
 }
 
+/** Результат встановлення з Modrinth (головний файл + залежності + застереження). */
+export interface AddonInstallResult {
+  main: AddonInfo;
+  installed: AddonInfo[];
+  dependencyCount: number;
+  warnings: string[];
+}
+
 /** Поля, які можна змінити після створення (PATCH /api/servers/:id). */
 export interface UpdateServerInput {
   name?: string;

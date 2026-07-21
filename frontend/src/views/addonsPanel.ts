@@ -18,6 +18,15 @@ function formatDownloads(n: number): string {
   return String(n);
 }
 
+/** Українська форма слова «залежність» за числом. */
+function pluralDeps(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'залежність';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'залежності';
+  return 'залежностей';
+}
+
 const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 ' +
   'placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none';
@@ -75,9 +84,16 @@ export function renderAddonsPanel(root: HTMLElement, serverId: string): () => vo
     installingIds.add(hit.projectId);
     render();
     try {
-      await api.installAddon(serverId, hit.projectId);
+      const result = await api.installAddon(serverId, hit.projectId);
       installedIds.add(hit.projectId);
-      toast(`Встановлено «${hit.title}»`, 'success');
+      // Підсумок: головний + скільки залежностей доставлено автоматично.
+      const depMsg =
+        result.dependencyCount > 0
+          ? ` + ${result.dependencyCount} ${pluralDeps(result.dependencyCount)}`
+          : '';
+      toast(`Встановлено «${hit.title}»${depMsg}`, 'success');
+      // Незадоволені обов'язкові залежності — окремим попередженням.
+      for (const warning of result.warnings) toast(warning, 'error');
       await refresh();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'Не вдалося встановити', 'error');

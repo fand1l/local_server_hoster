@@ -419,7 +419,9 @@ say Привіт усім!         — повідомлення в чат
 контенту прямо в панелі. **Знайдіть** плагін/мод на [Modrinth](https://modrinth.com)
 (порожній запит показує популярне) і натисніть **Встановити** — панель сама завантажить
 останню сумісну версію у відповідну теку сервера. Видача фільтрується під ваше ядро й
-версію гри, тож несумісне не з'явиться.
+версію гри, тож несумісне не з'явиться. Разом із плагіном/модом **автоматично
+встановлюються його обов'язкові залежності** (наприклад, Fabric API) — рекурсивно; якщо
+якоїсь сумісної немає, панель про це попередить, а не встановить щось зламане мовчки.
 
 <p align="center"><img src="docs/screenshots/12-modrinth.png" alt="Пошук і встановлення плагінів з Modrinth" width="800"></p>
 
@@ -680,7 +682,7 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `POST /api/servers/:id/players/action` | `{ player, action }` — kick/ban/pardon/op/deop/whitelist-add/whitelist-remove |
 | `GET /api/servers/:id/addons` | Список плагінів/модів (`supported`, `category: plugins\|mods\|null`) |
 | `GET /api/servers/:id/addons/search?q=&offset=` | Пошук на Modrinth під ядро+версію (`hits`, `source: online\|offline`) |
-| `POST /api/servers/:id/addons/install` | Встановити `{ projectId }` з Modrinth (остання сумісна версія) → `201` |
+| `POST /api/servers/:id/addons/install` | Встановити `{ projectId }` з Modrinth + обов'язкові залежності (рекурсивно) → `201` `{ main, installed, dependencyCount, warnings }` |
 | `POST /api/servers/:id/addons` | Завантажити власний `.jar` (multipart, поле `file`) → `201` |
 | `DELETE /api/servers/:id/addons/:filename` | Видалити плагін/мод → `204` |
 | `GET /api/servers/:id/files?path=` | Вміст теки: `{ path, entries: [{name,type,sizeBytes,modifiedAt}] }` (теки, потім файли) |

@@ -1,5 +1,6 @@
 import type {
   AddonInfo,
+  AddonInstallResult,
   AddonSearchResponse,
   AddonsResponse,
   DirListing,
@@ -112,9 +113,9 @@ export const api = {
     request<AddonSearchResponse>(
       `/api/servers/${id}/addons/search?q=${encodeURIComponent(q)}&offset=${offset}`,
     ),
-  /** Встановити проєкт Modrinth (остання сумісна версія → тека plugins/mods). */
+  /** Встановити проєкт Modrinth разом із обов'язковими залежностями. */
   installAddon: (id: string, projectId: string) =>
-    request<AddonInfo>(`/api/servers/${id}/addons/install`, {
+    request<AddonInstallResult>(`/api/servers/${id}/addons/install`, {
       method: 'POST',
       body: JSON.stringify({ projectId }),
     }),
