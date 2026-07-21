@@ -46,6 +46,12 @@ export interface ServerRecord {
   memoryMb: number;
   /** Ліміт CPU контейнера в ядрах (NanoCpus); null — без ліміту. */
   cpuCores: number | null;
+  /** true — лише ліцензійні акаунти (online-mode); false — офлайн-режим. */
+  onlineMode: boolean;
+  /** Радіус автопрегенерації світу Chunky у блоках; null — вимкнено. */
+  pregenRadius: number | null;
+  /** true — команди прегенерації вже надіслано серверу. */
+  pregenDone: boolean;
   /** Абсолютний шлях до директорії з файлами сервера на хості (bind-mount /data). */
   dataDir: string;
   /** ID Docker-контейнера, якщо він уже створений. */
@@ -83,10 +89,47 @@ export interface CreateServerInput {
   memoryMb: number;
   /** Ліміт CPU у ядрах; відсутнє = без ліміту. */
   cpuCores?: number;
+  /** Ліцензійні акаунти (online-mode). Типово true. */
+  onlineMode: boolean;
+  /** Радіус автопрегенерації Chunky у блоках; відсутнє = вимкнено. */
+  pregenRadius?: number;
   /** Користувач має явно прийняти Minecraft EULA — інакше сервер не стартує. */
   acceptEula: true;
   /** Одразу запустити сервер після створення контейнера. */
   autoStart: boolean;
+}
+
+/** Дії над гравцем, доступні з панелі. */
+export const PLAYER_ACTIONS = [
+  'kick',
+  'ban',
+  'pardon',
+  'op',
+  'deop',
+  'whitelist-add',
+  'whitelist-remove',
+] as const;
+export type PlayerAction = (typeof PLAYER_ACTIONS)[number];
+
+/** Зведена інформація про відомого серверу гравця. */
+export interface PlayerInfo {
+  name: string;
+  uuid: string | null;
+  online: boolean;
+  op: boolean;
+  whitelisted: boolean;
+  banned: boolean;
+}
+
+/** Відповідь GET /api/servers/:id/players. */
+export interface PlayersResponse {
+  players: PlayerInfo[];
+  onlineCount: number;
+  /** Чи вдалося опитати сервер через RCON (точний онлайн). */
+  rconAvailable: boolean;
+  /** true — на сервері діє whitelist (з server.properties). */
+  whitelistEnabled: boolean;
+  warning: string | null;
 }
 
 /** Список версій із каталогу (онлайн-API або вбудований фолбек). */

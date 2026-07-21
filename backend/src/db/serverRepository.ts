@@ -11,6 +11,9 @@ interface ServerRow {
   host_port: number;
   memory_mb: number;
   cpu_cores: number | null;
+  online_mode: number;
+  pregen_radius: number | null;
+  pregen_done: number;
   data_dir: string;
   container_id: string | null;
   status: string;
@@ -24,6 +27,7 @@ export interface ServerPatch {
   name?: string;
   memoryMb?: number;
   cpuCores?: number | null;
+  pregenDone?: boolean;
   containerId?: string | null;
   status?: ProvisionStatus;
   statusDetail?: string | null;
@@ -39,6 +43,9 @@ function rowToRecord(row: ServerRow): ServerRecord {
     hostPort: row.host_port,
     memoryMb: row.memory_mb,
     cpuCores: row.cpu_cores,
+    onlineMode: row.online_mode === 1,
+    pregenRadius: row.pregen_radius,
+    pregenDone: row.pregen_done === 1,
     dataDir: row.data_dir,
     containerId: row.container_id,
     status: row.status as ProvisionStatus,
@@ -88,12 +95,19 @@ export class ServerRepository {
       .prepare(
         `INSERT INTO servers
            (id, name, kind, version, core_version, host_port, memory_mb, cpu_cores,
+            online_mode, pregen_radius, pregen_done,
             data_dir, container_id, status, status_detail, created_at, updated_at)
          VALUES
            (@id, @name, @kind, @version, @coreVersion, @hostPort, @memoryMb, @cpuCores,
+            @onlineMode, @pregenRadius, @pregenDone,
             @dataDir, @containerId, @status, @statusDetail, @createdAt, @updatedAt)`,
       )
-      .run(record);
+      // SQLite не має булевого типу — конвертуємо у 0/1.
+      .run({
+        ...record,
+        onlineMode: record.onlineMode ? 1 : 0,
+        pregenDone: record.pregenDone ? 1 : 0,
+      });
   }
 
   /** Частково оновлює запис. Повертає оновлений запис або null, якщо id не існує. */
@@ -103,6 +117,7 @@ export class ServerRepository {
       name: 'name',
       memoryMb: 'memory_mb',
       cpuCores: 'cpu_cores',
+      pregenDone: 'pregen_done',
       containerId: 'container_id',
       status: 'status',
       statusDetail: 'status_detail',
@@ -115,7 +130,9 @@ export class ServerRepository {
     >) {
       if (field in patch) {
         sets.push(`${column} = @${field}`);
-        params[field] = patch[field] ?? null;
+        const value = patch[field];
+        // SQLite не має булевого типу — конвертуємо у 0/1.
+        params[field] = typeof value === 'boolean' ? (value ? 1 : 0) : (value ?? null);
       }
     }
     if (sets.length > 0) {

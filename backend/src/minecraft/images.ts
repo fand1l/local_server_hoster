@@ -58,7 +58,10 @@ export function containerNameFor(serverId: string): string {
  * Довідник: https://docker-minecraft-server.readthedocs.io/
  */
 export function buildContainerEnv(
-  record: Pick<ServerRecord, 'kind' | 'version' | 'coreVersion' | 'memoryMb'>,
+  record: Pick<
+    ServerRecord,
+    'kind' | 'version' | 'coreVersion' | 'memoryMb' | 'onlineMode' | 'pregenRadius'
+  >,
 ): string[] {
   const env = [
     // EULA приймає користувач у формі створення; без цього образ навмисно не стартує.
@@ -69,7 +72,15 @@ export function buildContainerEnv(
     `MEMORY=${record.memoryMb}M`,
     // Явно вимикаємо GUI сервера (headless-контейнер).
     'GUI=FALSE',
+    // Ліцензійна перевірка акаунтів (online-mode у server.properties).
+    `ONLINE_MODE=${record.onlineMode ? 'TRUE' : 'FALSE'}`,
   ];
+
+  // Автопрегенерація: образ itzg сам завантажить сумісну збірку Chunky
+  // (плагін або мод — залежно від TYPE) з Modrinth при старті.
+  if (record.pregenRadius) {
+    env.push('MODRINTH_PROJECTS=chunky');
+  }
 
   // Закріплена версія ядра (без неї образ бере останню доступну).
   if (record.coreVersion) {

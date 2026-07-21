@@ -20,6 +20,9 @@ export interface ServerView {
   memoryMb: number;
   /** Ліміт CPU у ядрах; null = без ліміту. */
   cpuCores: number | null;
+  onlineMode: boolean;
+  pregenRadius: number | null;
+  pregenDone: boolean;
   dataDir: string;
   containerId: string | null;
   status: ProvisionStatus;
@@ -38,8 +41,41 @@ export interface CreateServerInput {
   hostPort: number;
   memoryMb: number;
   cpuCores?: number;
+  onlineMode: boolean;
+  pregenRadius?: number;
   acceptEula: true;
   autoStart: boolean;
+}
+
+export type PlayerAction =
+  | 'kick'
+  | 'ban'
+  | 'pardon'
+  | 'op'
+  | 'deop'
+  | 'whitelist-add'
+  | 'whitelist-remove';
+
+export interface PlayerInfo {
+  name: string;
+  uuid: string | null;
+  online: boolean;
+  op: boolean;
+  whitelisted: boolean;
+  banned: boolean;
+}
+
+export interface PlayersResponse {
+  players: PlayerInfo[];
+  onlineCount: number;
+  rconAvailable: boolean;
+  whitelistEnabled: boolean;
+  warning: string | null;
+}
+
+export interface PregenAvailability {
+  available: boolean;
+  reason: string | null;
 }
 
 /** Поля, які можна змінити після створення (PATCH /api/servers/:id). */

@@ -35,4 +35,10 @@ export function registerMetaRoutes(app: FastifyInstance, catalog: VersionCatalog
     const { kind, version } = coreQuerySchema.parse(req.query);
     return catalog.coreVersions(kind, version);
   });
+
+  // Чи доступна автопрегенерація Chunky для цього ядра+версії (перевірка Modrinth).
+  app.get('/api/meta/pregen', async (req) => {
+    const { kind, version } = coreQuerySchema.parse(req.query);
+    return catalog.chunkyAvailability(kind, version);
+  });
 }

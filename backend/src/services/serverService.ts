@@ -8,6 +8,7 @@ import type { ServerRepository } from '../db/serverRepository.js';
 import { assertDockerAvailable, ensureImage, isDockerAvailable } from '../docker/client.js';
 import type { ContainerManager } from '../docker/containerManager.js';
 import type { ConsoleGateway } from '../docker/consoleGateway.js';
+import type { PregenScheduler } from './pregenScheduler.js';
 import { ConflictError, NotFoundError } from '../errors.js';
 import { resolveImageForVersion } from '../minecraft/images.js';
 import {
@@ -37,6 +38,7 @@ interface ServerServiceDeps {
   repo: ServerRepository;
   containers: ContainerManager;
   gateway: ConsoleGateway;
+  pregen: PregenScheduler;
   log: Logger;
 }
 
@@ -60,6 +62,7 @@ export class ServerService {
   private readonly repo: ServerRepository;
   private readonly containers: ContainerManager;
   private readonly gateway: ConsoleGateway;
+  private readonly pregen: PregenScheduler;
   private readonly log: Logger;
 
   constructor(deps: ServerServiceDeps) {
@@ -67,6 +70,7 @@ export class ServerService {
     this.repo = deps.repo;
     this.containers = deps.containers;
     this.gateway = deps.gateway;
+    this.pregen = deps.pregen;
     this.log = deps.log;
   }
 
@@ -174,6 +178,9 @@ export class ServerService {
       hostPort: input.hostPort,
       memoryMb: input.memoryMb,
       cpuCores: input.cpuCores ?? null,
+      onlineMode: input.onlineMode,
+      pregenRadius: input.pregenRadius ?? null,
+      pregenDone: false,
       dataDir: path.join(this.config.serversRoot, id),
       containerId: null,
       status: 'provisioning',
@@ -234,6 +241,8 @@ export class ServerService {
         await this.containers.start(containerId);
         await this.gateway.notifyRuntimeChange(ready, 'running');
         this.log.info(`Сервер ${record.name} (${id}) запущено`);
+        // Автопрегенерація (якщо налаштована) стартує після повного підняття сервера.
+        this.pregen.schedule(this.repo.get(id) ?? ready);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -279,7 +288,14 @@ export class ServerService {
 
     await this.containers.start(record.containerId);
     await this.gateway.notifyRuntimeChange(record, 'running');
+    // Прегенерація, якщо її ще не робили (сервер створювали без autoStart).
+    this.pregen.schedule(record);
     return this.toView(record, true);
+  }
+
+  /** Позначає прегенерацію сервера як виконану (викликає PregenScheduler). */
+  markPregenDone(id: string): void {
+    if (this.repo.get(id)) this.repo.update(id, { pregenDone: true });
   }
 
   /**

@@ -3,6 +3,7 @@ import { el, mount } from '../dom';
 import { openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
 import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
+import { renderPlayersPanel } from './playersPanel';
 import { ConsoleConnection } from '../ws';
 import type { PropertyEntry, ServerView } from '../types';
 
@@ -14,7 +15,7 @@ const CONSOLE_BUFFER_KEEP_CHARS = 350_000;
 /** Сторінка сервера: заголовок з діями + вкладки "Консоль" і "server.properties". */
 export function renderServerDetail(root: HTMLElement, serverId: string): () => void {
   let server: ServerView | null = null;
-  let activeTab: 'console' | 'properties' | 'settings' = 'console';
+  let activeTab: 'console' | 'players' | 'properties' | 'settings' = 'console';
 
   // ------------------------------------------------------------- заголовок
 
@@ -425,9 +426,14 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
   // ---------------------------------------------------------------- вкладки
 
   const consoleTabButton = el('button', { text: 'Консоль' });
+  const playersTabButton = el('button', { text: 'Гравці' });
   const propertiesTabButton = el('button', { text: 'server.properties' });
   const settingsTabButton = el('button', { text: 'Параметри' });
   const tabPanelSlot = el('div', {});
+
+  // Вкладка гравців має власний цикл оновлення; тримаємо його cleanup, щоб зупиняти.
+  const playersPanel = el('div', {});
+  let playersCleanup: (() => void) | null = null;
 
   function tabClass(active: boolean): string {
     return (
@@ -438,20 +444,38 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     );
   }
 
-  function selectTab(tab: 'console' | 'properties' | 'settings'): void {
+  function selectTab(tab: 'console' | 'players' | 'properties' | 'settings'): void {
     activeTab = tab;
     consoleTabButton.className = tabClass(tab === 'console');
+    playersTabButton.className = tabClass(tab === 'players');
     propertiesTabButton.className = tabClass(tab === 'properties');
     settingsTabButton.className = tabClass(tab === 'settings');
-    mount(
-      tabPanelSlot,
-      tab === 'console' ? consolePanel : tab === 'properties' ? propertiesPanel : settingsPanel,
-    );
+
+    // Полінг гравців працює лише поки їхня вкладка відкрита.
+    if (tab !== 'players' && playersCleanup) {
+      playersCleanup();
+      playersCleanup = null;
+    }
+
+    const panel =
+      tab === 'console'
+        ? consolePanel
+        : tab === 'players'
+          ? playersPanel
+          : tab === 'properties'
+            ? propertiesPanel
+            : settingsPanel;
+    mount(tabPanelSlot, panel);
+
     if (tab === 'properties' && !propertiesLoaded) void loadProperties();
     if (tab === 'settings') renderSettings();
+    if (tab === 'players' && !playersCleanup) {
+      playersCleanup = renderPlayersPanel(playersPanel, serverId, () => server);
+    }
   }
 
   consoleTabButton.addEventListener('click', () => selectTab('console'));
+  playersTabButton.addEventListener('click', () => selectTab('players'));
   propertiesTabButton.addEventListener('click', () => selectTab('properties'));
   settingsTabButton.addEventListener('click', () => selectTab('settings'));
 
@@ -481,6 +505,7 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
       'div',
       { class: 'mb-4 flex border-b border-zinc-800' },
       consoleTabButton,
+      playersTabButton,
       propertiesTabButton,
       settingsTabButton,
     ),

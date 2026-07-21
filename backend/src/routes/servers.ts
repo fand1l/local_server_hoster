@@ -47,6 +47,13 @@ const createServerSchema = z.object({
     .min(0.5, 'Мінімум пів ядра')
     .max(256, 'Забагато ядер')
     .optional(),
+  onlineMode: z.boolean().optional().default(true),
+  pregenRadius: z
+    .number({ invalid_type_error: 'Радіус має бути числом' })
+    .int()
+    .min(100, 'Замалий радіус прегенерації')
+    .max(50000, 'Завеликий радіус прегенерації (максимум 50000 блоків)')
+    .optional(),
   acceptEula: z.literal(true, {
     errorMap: () => ({ message: 'Потрібно прийняти Minecraft EULA' }),
   }),

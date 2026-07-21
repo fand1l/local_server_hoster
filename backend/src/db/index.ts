@@ -51,4 +51,14 @@ function migrate(db: Database.Database): void {
     `);
     db.pragma('user_version = 2');
   }
+
+  if (version < 3) {
+    // v3: офлайн-режим і автопрегенерація Chunky.
+    db.exec(`
+      ALTER TABLE servers ADD COLUMN online_mode INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE servers ADD COLUMN pregen_radius INTEGER;
+      ALTER TABLE servers ADD COLUMN pregen_done INTEGER NOT NULL DEFAULT 0;
+    `);
+    db.pragma('user_version = 3');
+  }
 }

@@ -27,6 +27,10 @@ export interface ElProps extends EventProps {
   max?: string;
   step?: string;
   list?: string;
+  src?: string;
+  alt?: string;
+  loading?: string;
+  style?: string;
   required?: boolean;
   disabled?: boolean;
   checked?: boolean;

@@ -274,6 +274,11 @@ export class ConsoleGateway {
     }
   }
 
+  /** Показує інформаційне повідомлення панелі у відкритих консолях сервера (якщо є). */
+  notifyInfo(serverId: string, message: string): void {
+    this.sessions.get(serverId)?.broadcast({ type: 'info', message });
+  }
+
   /** Викликається при видаленні сервера: закриває консолі всіх глядачів. */
   closeServer(serverId: string, reason: string): void {
     const session = this.sessions.get(serverId);

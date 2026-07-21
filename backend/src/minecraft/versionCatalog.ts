@@ -31,6 +31,21 @@ const FORGE_METADATA_URL =
 const NEOFORGE_VERSIONS_URL =
   process.env.MC_HOSTER_NEOFORGE_META_URL ??
   'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge';
+const MODRINTH_BASE = process.env.MC_HOSTER_MODRINTH_URL ?? 'https://api.modrinth.com/v2';
+/** Slug проєкту Chunky на Modrinth (прегенератор чанків). */
+const CHUNKY_PROJECT = 'chunky';
+
+/**
+ * Наше ядро → лоадер у термінах Modrinth. Vanilla не має завантажувача модів,
+ * тож для нього Chunky (як і будь-який плагін/мод) недоступний у принципі.
+ */
+const MODRINTH_LOADER: Partial<Record<ServerKind, string>> = {
+  PAPER: 'paper',
+  SPIGOT: 'spigot',
+  FABRIC: 'fabric',
+  FORGE: 'forge',
+  NEOFORGE: 'neoforge',
+};
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 хв — версії виходять не щохвилини
 const FETCH_TIMEOUT_MS = 8000;
@@ -234,6 +249,46 @@ export class VersionCatalog {
     }
     if (found.size === 0) throw new Error('Не вдалося зіставити версії NeoForge з версіями гри');
     return releases.filter((release) => found.has(release));
+  }
+
+  // ------------------------------------------------------------- Chunky
+
+  /**
+   * Чи доступний прегенератор Chunky для цього ядра+версії гри.
+   * Питаємо Modrinth, чи існує версія Chunky під відповідний лоадер і версію
+   * гри. Vanilla не має завантажувача модів → одразу false без запиту.
+   */
+  async chunkyAvailability(
+    kind: ServerKind,
+    gameVersion: string,
+  ): Promise<{ available: boolean; reason: string | null }> {
+    const loader = MODRINTH_LOADER[kind];
+    if (!loader) {
+      return {
+        available: false,
+        reason: 'Vanilla не підтримує плагіни/моди — прегенерація Chunky недоступна. Оберіть Paper, Fabric, Forge або NeoForge.',
+      };
+    }
+    try {
+      const versions = await this.cached(`chunky:${loader}:${gameVersion}`, async () => {
+        const query =
+          `?loaders=${encodeURIComponent(JSON.stringify([loader]))}` +
+          `&game_versions=${encodeURIComponent(JSON.stringify([gameVersion]))}`;
+        const data = (await fetchJson(
+          `${MODRINTH_BASE}/project/${CHUNKY_PROJECT}/version${query}`,
+        )) as unknown[];
+        return Array.isArray(data) ? data.length : 0;
+      });
+      return versions > 0
+        ? { available: true, reason: null }
+        : {
+            available: false,
+            reason: `Для ${gameVersion} (${kind}) немає сумісної збірки Chunky — спробуйте іншу версію гри.`,
+          };
+    } catch {
+      // Modrinth недоступний — не блокуємо створення, але й не обіцяємо прегенерацію.
+      return { available: false, reason: 'Не вдалося перевірити доступність Chunky (немає з’єднання).' };
+    }
   }
 
   /** Упорядковує список версій гри за порядком manifest'а Mojang (новіші першими). */

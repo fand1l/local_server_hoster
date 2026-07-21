@@ -1,6 +1,9 @@
 import type {
   CoreVersionsResult,
   CreateServerInput,
+  PlayerAction,
+  PlayersResponse,
+  PregenAvailability,
   PropertiesResponse,
   PropertyEntry,
   ServerKind,
@@ -61,6 +64,17 @@ export const api = {
     request<CoreVersionsResult>(
       `/api/meta/core-versions?kind=${kind}&version=${encodeURIComponent(version)}`,
     ),
+  metaPregen: (kind: ServerKind, version: string) =>
+    request<PregenAvailability>(
+      `/api/meta/pregen?kind=${kind}&version=${encodeURIComponent(version)}`,
+    ),
+
+  listPlayers: (id: string) => request<PlayersResponse>(`/api/servers/${id}/players`),
+  playerAction: (id: string, player: string, action: PlayerAction) =>
+    request<{ output: string; confirmed: boolean }>(`/api/servers/${id}/players/action`, {
+      method: 'POST',
+      body: JSON.stringify({ player, action }),
+    }),
 
   listServers: () => request<ServerView[]>('/api/servers'),
   getServer: (id: string) => request<ServerView>(`/api/servers/${id}`),

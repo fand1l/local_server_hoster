@@ -1,3 +1,4 @@
+import { PassThrough } from 'node:stream';
 import type Docker from 'dockerode';
 import { isDockerNotFound, translateDockerError } from '../errors.js';
 import {
@@ -162,6 +163,56 @@ export class ContainerManager {
     } catch (err) {
       if (isDockerNotFound(err)) return;
       throw translateDockerError(err, 'Видалення контейнера');
+    }
+  }
+
+  /**
+   * Виконує команду всередині запущеного контейнера і повертає її вивід.
+   * Використовується для RCON без відкриття портів: `docker exec <c> rcon-cli …`
+   * (rcon-cli вбудований в образ itzg і сам знає пароль з env контейнера).
+   */
+  async execCapture(
+    containerId: string,
+    cmd: string[],
+    timeoutMs = 10_000,
+  ): Promise<{ exitCode: number | null; output: string }> {
+    try {
+      const container = this.docker.getContainer(containerId);
+      const exec = await container.exec({
+        Cmd: cmd,
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = await exec.start({});
+
+      const chunks: Buffer[] = [];
+      const sink = new PassThrough();
+      sink.on('data', (chunk: Buffer) => chunks.push(chunk));
+      // exec-потік мультиплексований так само, як логи контейнера.
+      this.docker.modem.demuxStream(stream, sink, sink);
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          (stream as unknown as { destroy?: () => void }).destroy?.();
+          reject(new Error(`Команда ${cmd[0]} не завершилася за ${timeoutMs} мс`));
+        }, timeoutMs);
+        stream.on('end', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        stream.on('error', (err: Error) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+      });
+
+      const inspect = await exec.inspect();
+      return {
+        exitCode: typeof inspect.ExitCode === 'number' ? inspect.ExitCode : null,
+        output: Buffer.concat(chunks).toString('utf8').trim(),
+      };
+    } catch (err) {
+      throw translateDockerError(err, `Виконання ${cmd[0]} у контейнері`);
     }
   }
 

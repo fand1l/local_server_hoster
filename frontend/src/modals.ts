@@ -114,6 +114,9 @@ interface WizardState {
   hostPort: number;
   memoryMb: number;
   cpuCores: number;
+  onlineMode: boolean;
+  /** 0 = прегенерація вимкнена; інакше — радіус у блоках. */
+  pregenRadius: number;
   autoStart: boolean;
   acceptEula: boolean;
 }
@@ -133,6 +136,8 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     hostPort: suggestedPort,
     memoryMb: 2048,
     cpuCores: 2,
+    onlineMode: true,
+    pregenRadius: 0,
     autoStart: true,
     acceptEula: false,
   };
@@ -572,6 +577,102 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
     );
   }
 
+  /**
+   * Блок автопрегенерації: запитує в бекенда, чи є сумісна збірка Chunky для
+   * обраного ядра+версії. Якщо є — показує чекбокс і поле радіуса з підказкою;
+   * якщо ні (Vanilla, немає збірки, немає мережі) — пояснює, чому недоступно.
+   */
+  function renderPregenBlock(slot: HTMLElement): void {
+    mount(
+      slot,
+      el('p', { class: 'text-xs text-zinc-500', text: 'Перевірка доступності прегенерації світу…' }),
+    );
+
+    void api
+      .metaPregen(state.kind, state.version)
+      .then((result) => {
+        if (!result.available) {
+          state.pregenRadius = 0;
+          mount(
+            slot,
+            el('p', {
+              class: 'text-xs text-zinc-500',
+              text: `Автопрегенерація недоступна: ${result.reason ?? 'немає сумісної збірки Chunky'}`,
+            }),
+          );
+          return;
+        }
+
+        const radiusInput = el('input', {
+          class: INPUT_CLASS,
+          type: 'number',
+          min: '100',
+          max: '50000',
+          step: '100',
+          value: String(state.pregenRadius > 0 ? state.pregenRadius : 3000),
+          onInput: (event) => {
+            state.pregenRadius = Number((event.target as HTMLInputElement).value);
+            updatePregenTip();
+          },
+        });
+        const pregenTip = el('p', { class: 'mt-1 text-xs text-zinc-500' });
+
+        function updatePregenTip(): void {
+          const r = state.pregenRadius > 0 ? state.pregenRadius : 3000;
+          // Chunky рахує радіус у блоках від центру світу; квадратна область.
+          const sideBlocks = r * 2;
+          const chunks = Math.round((sideBlocks / 16) ** 2);
+          const minutesRough = Math.max(1, Math.round(chunks / 8000)); // ~груба оцінка
+          pregenTip.textContent =
+            `Радіус — у БЛОКАХ від центру світу. ${r} блоків = область ${sideBlocks}×${sideBlocks} ` +
+            `(~${chunks.toLocaleString('uk')} чанків, орієнтовно ~${minutesRough} хв генерації). ` +
+            `Більший радіус = менше лагів у грі, але довша разова генерація.`;
+        }
+
+        const radiusField = el(
+          'div',
+          { class: state.pregenRadius > 0 ? 'mt-2' : 'mt-2 hidden' },
+          el('span', { class: 'mb-1 block text-sm text-zinc-400', text: 'Радіус прегенерації (блоки)' }),
+          radiusInput,
+          pregenTip,
+        );
+        updatePregenTip();
+
+        const toggle = el('input', {
+          type: 'checkbox',
+          class: 'accent-emerald-500',
+          checked: state.pregenRadius > 0,
+          onChange: (event) => {
+            const on = (event.target as HTMLInputElement).checked;
+            state.pregenRadius = on ? Number(radiusInput.value) || 3000 : 0;
+            radiusField.classList.toggle('hidden', !on);
+          },
+        });
+
+        mount(
+          slot,
+          el(
+            'label',
+            { class: 'flex items-center gap-2 text-sm text-zinc-300' },
+            toggle,
+            'Автоматична прегенерація світу (Chunky)',
+          ),
+          el('p', {
+            class: 'mt-1 text-xs text-zinc-500',
+            text: 'Згенерує чанки навколо спавна одразу після запуску — прибирає лаги підвантаження під час гри. Триває один раз.',
+          }),
+          radiusField,
+        );
+      })
+      .catch(() => {
+        state.pregenRadius = 0;
+        mount(
+          slot,
+          el('p', { class: 'text-xs text-zinc-500', text: 'Не вдалося перевірити доступність прегенерації.' }),
+        );
+      });
+  }
+
   // ----------------------------------- крок 3: ресурси, порт, підтвердження
 
   function renderStep3(): HTMLElement {
@@ -635,6 +736,31 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
       },
     });
 
+    // Онлайн-режим (ліцензія): увімкнено = лише офіційні акаунти Mojang/Microsoft.
+    const onlineModeCheckbox = el('input', {
+      type: 'checkbox',
+      class: 'accent-emerald-500',
+      checked: state.onlineMode,
+      onChange: (event) => {
+        state.onlineMode = (event.target as HTMLInputElement).checked;
+        onlineModeHint.textContent = state.onlineMode
+          ? 'Лише ліцензійні акаунти. Голови скінів гравців працюють.'
+          : 'Офлайн-режим: пускає піратські клієнти. Скіни й перевірка акаунтів вимкнені, UUID нестабільні.';
+      },
+    });
+    const onlineModeHint = el('span', {
+      class: 'mt-1 block text-xs text-zinc-500',
+      text: 'Лише ліцензійні акаунти. Голови скінів гравців працюють.',
+    });
+
+    // Блок автопрегенерації Chunky: показуємо лише коли Modrinth підтвердив
+    // сумісність із обраним ядром+версією (перевірка на кроці 2 недосяжна — версія
+    // остаточна лише тут).
+    const pregenSlot = el('div', {
+      class: 'rounded-lg border border-zinc-800 bg-zinc-950/40 p-3',
+    });
+    renderPregenBlock(pregenSlot);
+
     const autoStartCheckbox = el('input', {
       type: 'checkbox',
       class: 'accent-emerald-500',
@@ -681,6 +807,18 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         cpuSlider,
       ),
       field('Порт на цьому комп’ютері', portInput, 'Гравці підключаються до нього'),
+      el(
+        'div',
+        {},
+        el(
+          'label',
+          { class: 'flex items-center gap-2 text-sm text-zinc-300' },
+          onlineModeCheckbox,
+          'Тільки ліцензійні акаунти (online-mode)',
+        ),
+        onlineModeHint,
+      ),
+      pregenSlot,
       el(
         'label',
         { class: 'flex items-center gap-2 text-sm text-zinc-300' },
@@ -731,6 +869,8 @@ export function openCreateServerModal(suggestedPort: number, onCreated: () => vo
         hostPort: state.hostPort,
         memoryMb: state.memoryMb,
         cpuCores: state.cpuCores,
+        onlineMode: state.onlineMode,
+        pregenRadius: state.pregenRadius > 0 ? state.pregenRadius : undefined,
         acceptEula: true,
         autoStart: state.autoStart,
       });

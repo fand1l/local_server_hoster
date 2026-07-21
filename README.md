@@ -22,6 +22,10 @@ Node.js-бекенд керує серверами в ізольованих Doc
   Forge / NeoForge API — сумісність гарантована), повзунки ОЗП і ЦП від реальних ресурсів ПК
 - ✅ Редагування після створення: назва, пам'ять і ліміт CPU (контейнер перестворюється
   автоматично, файли світу не зачіпаються)
+- ✅ Керування гравцями: онлайн-список, whitelist / оператори / бани, kick/ban/op одним
+  кліком (через RCON без відкриття портів), голови скінів для ліцензійних акаунтів
+- ✅ Онлайн/офлайн-режим при створенні (ліцензія) та автоматична прегенерація світу
+  через Chunky — прибирає лаги підвантаження чанків
 - ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — Node.js встановлювати не потрібно
 - ✅ Образ [`itzg/minecraft-server`](https://docker-minecraft-server.readthedocs.io/) сам
   завантажує потрібний jar; панель сама підбирає правильну Java під версію гри
@@ -328,12 +332,18 @@ FabricMC, Forge, NeoForge), тому тут завжди є найновіші �
 
 <p align="center"><img src="docs/screenshots/02-create-step2.png" alt="Крок 2: версія гри та ядра" width="700"></p>
 
-**Крок 3 — ресурси.** Повзунки ОЗП і ЦП обмежені реальними можливостями вашого ПК
-(панель сама їх визначає). 2 ГБ вистачає на 2–5 гравців; для модпаків беріть 4 ГБ+.
-Порт `25565` — стандартний для Minecraft. І не забудьте прийняти
-[Minecraft EULA](https://aka.ms/MinecraftEULA):
+**Крок 3 — ресурси та опції.** Повзунки ОЗП і ЦП обмежені реальними можливостями вашого
+ПК (панель сама їх визначає). 2 ГБ вистачає на 2–5 гравців; для модпаків беріть 4 ГБ+.
+Тут же:
 
-<p align="center"><img src="docs/screenshots/02-create-step3.png" alt="Крок 3: ресурси та порт" width="700"></p>
+- **Тільки ліцензійні акаунти (online-mode)** — знято галочку = офлайн-режим (пускає
+  піратські клієнти, але вимикає скіни й перевірку акаунтів);
+- **Автоматична прегенерація світу (Chunky)** — з'являється лише коли для обраного
+  ядра+версії існує сумісна збірка Chunky (перевіряється через Modrinth). Вкажіть радіус
+  у блоках — панель згенерує чанки навколо спавна одразу після запуску, і лаги
+  підвантаження під час гри зникнуть.
+
+<p align="center"><img src="docs/screenshots/02-create-step3.png" alt="Крок 3: ресурси, онлайн-режим, прегенерація" width="700"></p>
 
 ### 2.2. Дочекайтеся статусу «Працює»
 
@@ -366,7 +376,21 @@ say Привіт усім!         — повідомлення в чат
 
 <p align="center"><img src="docs/screenshots/05-properties.png" alt="Редактор server.properties" width="800"></p>
 
-### 2.5. Редагуйте параметри сервера
+### 2.5. Керуйте гравцями
+
+Вкладка **Гравці** зводить онлайн-список (через RCON) і всіх відомих серверу гравців
+(з файлів `usercache/whitelist/ops/banned`). Фільтри — онлайн / усі / whitelist /
+оператори / бани; на кожному рядку дії **kick, ban, op, whitelist** одним кліком.
+Для ліцензійних (online-mode) серверів підтягуються голови скінів:
+
+<p align="center"><img src="docs/screenshots/08-players.png" alt="Вкладка Гравці" width="800"></p>
+
+> [!NOTE]
+> Дії виконуються через **RCON усередині контейнера** (`docker exec rcon-cli`) — порт
+> RCON назовні **не відкривається**, пароль лишається в контейнері. Якщо RCON вимкнено
+> у `server.properties`, команди йдуть у консоль через stdin (без підтвердження виконання).
+
+### 2.6. Редагуйте параметри сервера
 
 Вкладка **Параметри** — зміна налаштувань уже створеного сервера: назва редагується
 будь-коли, а пам'ять і ліміт CPU — коли сервер зупинено (панель перестворює контейнер
@@ -374,7 +398,7 @@ say Привіт усім!         — повідомлення в чат
 
 <p align="center"><img src="docs/screenshots/07-settings.png" alt="Вкладка Параметри" width="800"></p>
 
-### 2.6. Зайдіть у гру
+### 2.7. Зайдіть у гру
 
 | Хто підключається | Адреса у грі (Multiplayer → Add Server) |
 | --- | --- |
@@ -483,13 +507,18 @@ local_server_hoster/
 │       │   └── consoleGateway.ts     # WS-сесії: logs --follow + attach stdin
 │       ├── minecraft/
 │       │   ├── images.ts      # itzg-образ: env, вибір Java, ліміти пам'яті
+│       │   ├── versionCatalog.ts  # живі версії гри/ядра + Chunky (Mojang/Paper/Fabric/Forge/NeoForge/Modrinth)
 │       │   └── properties.ts  # парсер server.properties (зберігає коментарі)
 │       ├── services/
-│       │   └── serverService.ts      # оркестрація CRUD + життєвого циклу
+│       │   ├── serverService.ts      # оркестрація CRUD + життєвого циклу
+│       │   ├── playerService.ts      # гравці: RCON (docker exec) + файли сервера
+│       │   └── pregenScheduler.ts    # автопрегенерація Chunky після старту (RCON-проба)
 │       ├── routes/
-│       │   ├── servers.ts     # REST CRUD + start/stop/restart (zod-валідація)
+│       │   ├── servers.ts     # REST CRUD + start/stop/restart/PATCH (zod-валідація)
 │       │   ├── properties.ts  # GET/PUT server.properties
-│       │   ├── system.ts      # GET /api/system (стан Docker)
+│       │   ├── players.ts     # GET гравці / POST дія над гравцем
+│       │   ├── meta.ts        # версії гри/ядра + доступність прегенерації
+│       │   ├── system.ts      # GET /api/system (стан Docker + ресурси)
 │       │   └── console.ws.ts  # WebSocket-роут консолі
 │       └── utils/             # порти (probe), шляхи (bind-mount, захист rm -rf)
 ├── frontend/                  # Vite + TypeScript + Tailwind CSS 4 (vanilla, без фреймворка)
@@ -523,7 +552,7 @@ local_server_hoster/
 | `MC_HOSTER_GAME_BIND_HOST` | `0.0.0.0` | Куди публікувати ігрові порти (0.0.0.0 = доступно з LAN) |
 | `MC_HOSTER_FRONTEND_DIR` | автопошук | Явний шлях до збірки фронтенду (для нетипових розкладок) |
 | `DOCKER_HOST` та ін. | — | Стандартні змінні Docker; без них: unix-сокет (Linux/macOS) або named pipe (Windows) |
-| `MC_HOSTER_MOJANG_META_URL` / `MC_HOSTER_PAPER_META_URL` / `MC_HOSTER_PAPER_FILL_URL` / `MC_HOSTER_FABRIC_META_URL` | офіційні API | Перевизначення URL каталогів версій (дзеркала, тести) |
+| `MC_HOSTER_MOJANG_META_URL` / `MC_HOSTER_PAPER_META_URL` / `MC_HOSTER_PAPER_FILL_URL` / `MC_HOSTER_FABRIC_META_URL` / `MC_HOSTER_FORGE_META_URL` / `MC_HOSTER_NEOFORGE_META_URL` / `MC_HOSTER_MODRINTH_URL` | офіційні API | Перевизначення URL каталогів версій і Modrinth (дзеркала, тести) |
 | `LOG_LEVEL` | `info` | Рівень логів бекенду (pino) |
 
 Скрипти розробника:
@@ -583,9 +612,10 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | --- | --- |
 | `GET /api/system` | `{ dockerAvailable, dockerVersion, totalMemoryMb, cpuCount }` |
 | `GET /api/meta/versions?kind=` | Версії гри для ядра (живі списки з Mojang/PaperMC/FabricMC, кеш 30 хв, `source: online\|fallback`) |
-| `GET /api/meta/core-versions?kind=&version=` | Сумісні версії ядра (білди Paper / лоадери Fabric) під версію гри |
+| `GET /api/meta/core-versions?kind=&version=` | Сумісні версії ядра (білди Paper / лоадери Fabric / версії Forge / NeoForge) під версію гри |
+| `GET /api/meta/pregen?kind=&version=` | Чи доступна автопрегенерація Chunky для цього ядра+версії (перевірка Modrinth) |
 | `GET /api/servers` | Список серверів + живий стан (`runtime: creating/running/stopped/error/unknown`) |
-| `POST /api/servers` | Створити: `{ name, kind, version, coreVersion?, hostPort, memoryMb, cpuCores?, acceptEula: true, autoStart }` → `201`, провізія у фоні |
+| `POST /api/servers` | Створити: `{ name, kind, version, coreVersion?, hostPort, memoryMb, cpuCores?, onlineMode, pregenRadius?, acceptEula: true, autoStart }` → `201`, провізія у фоні |
 | `GET /api/servers/:id` | Один сервер |
 | `PATCH /api/servers/:id` | Змінити `{ name?, memoryMb?, cpuCores? }`; ресурси — лише на зупиненому (контейнер перестворюється) |
 | `POST /api/servers/:id/start` | Запуск (перестворює контейнер після помилки/видалення вручну) |
@@ -594,6 +624,8 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `DELETE /api/servers/:id?deleteData=true\|false` | Видалити контейнер (+ опційно файли світу) → `204` |
 | `GET /api/servers/:id/properties` | `{ exists, entries: [{key,value}], warning }` |
 | `PUT /api/servers/:id/properties` | Оновити значення; коментарі та невідомі ключі у файлі зберігаються |
+| `GET /api/servers/:id/players` | Гравці: онлайн (RCON) + відомі (файли) + whitelist/ops/bans |
+| `POST /api/servers/:id/players/action` | `{ player, action }` — kick/ban/pardon/op/deop/whitelist-add/whitelist-remove |
 | `GET /api/servers/:id/console` (WS) | Консоль у реальному часі |
 
 Помилки завжди мають форму `{ "error": { "code", "message" } }`

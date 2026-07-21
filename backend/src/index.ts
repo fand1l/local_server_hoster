@@ -8,9 +8,12 @@ import { ConsoleGateway } from './docker/consoleGateway.js';
 import { VersionCatalog } from './minecraft/versionCatalog.js';
 import { registerConsoleRoute } from './routes/console.ws.js';
 import { registerMetaRoutes } from './routes/meta.js';
+import { registerPlayerRoutes } from './routes/players.js';
 import { registerPropertiesRoutes } from './routes/properties.js';
 import { registerServerRoutes } from './routes/servers.js';
 import { registerSystemRoutes } from './routes/system.js';
+import { PlayerService } from './services/playerService.js';
+import { PregenScheduler } from './services/pregenScheduler.js';
 import { ServerService } from './services/serverService.js';
 
 /**
@@ -31,12 +34,25 @@ async function main(): Promise<void> {
   const gateway = new ConsoleGateway(getDocker);
 
   const app = await createApp(config);
-  const service = new ServerService({ config, repo, containers, gateway, log: app.log });
+
+  // Планувальник прегенерації читає завжди свіжий запис і сам позначає виконання;
+  // markDone відкладаємо через замикання, бо service створюється наступним рядком.
+  let service: ServerService;
+  const pregen = new PregenScheduler({
+    containers,
+    gateway,
+    getRecord: (id) => repo.get(id),
+    markDone: (id) => service.markPregenDone(id),
+    log: app.log,
+  });
+  service = new ServerService({ config, repo, containers, gateway, pregen, log: app.log });
+  const players = new PlayerService({ containers, gateway, log: app.log });
 
   registerSystemRoutes(app);
   registerMetaRoutes(app, new VersionCatalog());
   registerServerRoutes(app, service);
   registerPropertiesRoutes(app, service);
+  registerPlayerRoutes(app, service, players);
   registerConsoleRoute(app, { service, gateway });
 
   if (await isDockerAvailable()) {
