@@ -180,49 +180,75 @@ export function renderFileManager(root: HTMLElement, serverId: string): () => vo
     return el('div', { class: 'flex flex-wrap items-center gap-1 text-sm' }, ...crumbs);
   }
 
+  /** Відкрити елемент: тека → навігація, файл → редактор. */
+  function activate(entry: FileEntry): void {
+    if (entry.type === 'directory') void navigate(joinPath(currentPath, entry.name));
+    else void openFile(entry);
+  }
+
+  /** Обгортка обробника кнопки-дії: гасимо спливання, щоб не спрацював клік боксу. */
+  function rowAction(fn: () => void): (e: Event) => void {
+    return (e: Event) => {
+      e.stopPropagation();
+      fn();
+    };
+  }
+
   function fileRow(entry: FileEntry): HTMLElement {
     const smallBtn =
       'rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition duration-100 active:scale-[0.97]';
-    const nameEl =
-      entry.type === 'directory'
-        ? el('button', {
-            class: 'truncate text-left text-sm font-medium text-zinc-100 hover:text-emerald-400',
-            text: entry.name,
-            onClick: () => void navigate(joinPath(currentPath, entry.name)),
-          })
-        : el('button', {
-            class: 'truncate text-left text-sm font-medium text-zinc-100 hover:text-emerald-400',
-            text: entry.name,
-            title: 'Відкрити для редагування',
-            onClick: () => void openFile(entry),
-          });
+
+    const nameEl = el('span', {
+      class: 'block truncate text-sm font-medium text-zinc-100 transition-colors group-hover:text-emerald-400',
+      text: entry.name,
+    });
 
     const actions: HTMLElement[] = [];
     if (entry.type === 'file') {
-      const dl = el('button', {
-        class: `${smallBtn} bg-zinc-800 text-zinc-200 ring-zinc-700 hover:bg-zinc-700`,
-        text: '⤓',
-        title: 'Завантажити',
-        onClick: () => download(entry),
-      });
-      actions.push(dl);
+      actions.push(
+        el('button', {
+          class: `${smallBtn} bg-zinc-800 text-zinc-200 ring-zinc-700 hover:bg-zinc-700`,
+          text: '⤓',
+          title: 'Завантажити',
+          onClick: rowAction(() => download(entry)),
+        }),
+      );
     }
-    const renameBtn = el('button', {
-      class: `${smallBtn} bg-zinc-800 text-zinc-200 ring-zinc-700 hover:bg-zinc-700`,
-      text: 'Перейм.',
-      onClick: () => void rename(entry),
-    });
-    const delBtn = el('button', {
-      class: `${smallBtn} bg-red-950/60 text-red-300 ring-red-900/60 hover:bg-red-900/50`,
-      text: 'Видалити',
-      onClick: () => void remove(entry),
-    });
-    actions.push(renameBtn, delBtn);
+    actions.push(
+      el('button', {
+        class: `${smallBtn} bg-zinc-800 text-zinc-200 ring-zinc-700 hover:bg-zinc-700`,
+        text: 'Перейм.',
+        onClick: rowAction(() => void rename(entry)),
+      }),
+      el('button', {
+        class: `${smallBtn} bg-red-950/60 text-red-300 ring-red-900/60 hover:bg-red-900/50`,
+        text: 'Видалити',
+        onClick: rowAction(() => void remove(entry)),
+      }),
+    );
 
-    return el(
+    // Весь бокс — одна велика кнопка (клік/Enter/Space). Кнопки дій усередині
+    // гасять спливання, тож не запускають навігацію.
+    const box = el(
       'div',
-      { class: 'flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2' },
-      el('span', { class: 'text-lg', text: iconFor(entry) }),
+      {
+        class:
+          'group lift flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-800 ' +
+          'bg-zinc-900/40 px-3 py-2 hover:border-zinc-700 hover:bg-zinc-800/50 ' +
+          'hover:shadow-lg hover:shadow-black/20',
+        title: entry.type === 'directory' ? 'Відкрити теку' : 'Відкрити для редагування',
+        onClick: () => activate(entry),
+        onKeydown: (e) => {
+          // Enter/Space лише коли сфокусований сам бокс, а не кнопка-дія в ньому.
+          if (e.target !== e.currentTarget) return;
+          const key = (e as KeyboardEvent).key;
+          if (key === 'Enter' || key === ' ') {
+            e.preventDefault();
+            activate(entry);
+          }
+        },
+      },
+      el('span', { class: 'shrink-0 text-lg', text: iconFor(entry) }),
       el(
         'div',
         { class: 'min-w-0 flex-1' },
@@ -234,6 +260,9 @@ export function renderFileManager(root: HTMLElement, serverId: string): () => vo
       ),
       el('div', { class: 'flex shrink-0 items-center gap-1' }, ...actions),
     );
+    box.setAttribute('role', 'button');
+    box.tabIndex = 0;
+    return box;
   }
 
   function renderList(): void {
@@ -263,18 +292,33 @@ export function renderFileManager(root: HTMLElement, serverId: string): () => vo
     const listArea = el('div', { class: 'space-y-2 rounded-lg' });
     const rows: HTMLElement[] = [];
     if (currentPath) {
-      rows.push(
-        el(
-          'div',
-          { class: 'flex items-center gap-3 rounded-lg border border-zinc-800/60 bg-zinc-900/30 px-3 py-2' },
-          el('span', { class: 'text-lg', text: '↩' }),
-          el('button', {
-            class: 'text-sm font-medium text-zinc-300 hover:text-emerald-400',
-            text: '.. (на рівень вище)',
-            onClick: () => void navigate(parentOf(currentPath)),
-          }),
-        ),
+      const goUp = () => void navigate(parentOf(currentPath));
+      const upBox = el(
+        'div',
+        {
+          class:
+            'group lift flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-800/60 ' +
+            'bg-zinc-900/30 px-3 py-2 hover:border-zinc-700 hover:bg-zinc-800/40',
+          title: 'На рівень вище',
+          onClick: goUp,
+          onKeydown: (e) => {
+            if (e.target !== e.currentTarget) return;
+            const key = (e as KeyboardEvent).key;
+            if (key === 'Enter' || key === ' ') {
+              e.preventDefault();
+              goUp();
+            }
+          },
+        },
+        el('span', { class: 'shrink-0 text-lg', text: '↩' }),
+        el('span', {
+          class: 'text-sm font-medium text-zinc-300 transition-colors group-hover:text-emerald-400',
+          text: '.. (на рівень вище)',
+        }),
       );
+      upBox.setAttribute('role', 'button');
+      upBox.tabIndex = 0;
+      rows.push(upBox);
     }
     if (listing && listing.entries.length > 0) {
       rows.push(...listing.entries.map(fileRow));

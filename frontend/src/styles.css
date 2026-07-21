@@ -66,6 +66,7 @@
   transition:
     transform 130ms var(--ease-out),
     border-color 130ms ease-out,
+    background-color 130ms ease-out,
     box-shadow 130ms ease-out;
 }
 .lift:hover {
