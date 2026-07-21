@@ -4,6 +4,7 @@ import { openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
 import { addonTabLabel, BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, pregenBar, statusBadge, withButtonLock } from '../ui';
 import { renderAddonsPanel } from './addonsPanel';
+import { renderFileManager } from './fileManager';
 import { renderPlayersPanel } from './playersPanel';
 import { ConsoleConnection } from '../ws';
 import type { PregenProgress, PropertyEntry, ServerView } from '../types';
@@ -16,7 +17,7 @@ const CONSOLE_BUFFER_KEEP_CHARS = 350_000;
 /** Сторінка сервера: заголовок з діями + вкладки "Консоль" і "server.properties". */
 export function renderServerDetail(root: HTMLElement, serverId: string): () => void {
   let server: ServerView | null = null;
-  let activeTab: 'console' | 'players' | 'addons' | 'properties' | 'settings' = 'console';
+  let activeTab: 'console' | 'players' | 'files' | 'addons' | 'properties' | 'settings' = 'console';
 
   // ------------------------------------------------------------- заголовок
 
@@ -466,6 +467,7 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
 
   const consoleTabButton = el('button', { text: 'Консоль' });
   const playersTabButton = el('button', { text: 'Гравці' });
+  const filesTabButton = el('button', { text: 'Файли' });
   // Підпис і видимість вкладки доповнень залежать від ядра (Vanilla — прихована);
   // проставляємо в applyServer, коли kind відомий. Поки — сховано.
   const addonsTabButton = el('button', { class: 'hidden', text: 'Плагіни' });
@@ -473,9 +475,11 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
   const settingsTabButton = el('button', { text: 'Параметри' });
   const tabPanelSlot = el('div', {});
 
-  // Вкладка гравців має власний цикл оновлення; тримаємо його cleanup, щоб зупиняти.
+  // Вкладки з власним циклом/станом — тримаємо cleanup, щоб зупиняти.
   const playersPanel = el('div', {});
   let playersCleanup: (() => void) | null = null;
+  const filesPanel = el('div', {});
+  let filesCleanup: (() => void) | null = null;
   const addonsPanel = el('div', {});
   let addonsCleanup: (() => void) | null = null;
   let addonsSupported = false;
@@ -489,12 +493,15 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     );
   }
 
-  function selectTab(tab: 'console' | 'players' | 'addons' | 'properties' | 'settings'): void {
+  function selectTab(
+    tab: 'console' | 'players' | 'files' | 'addons' | 'properties' | 'settings',
+  ): void {
     // Вкладка доповнень прихована (Vanilla) — не даємо туди перейти.
     if (tab === 'addons' && !addonsSupported) tab = 'console';
     activeTab = tab;
     consoleTabButton.className = tabClass(tab === 'console');
     playersTabButton.className = tabClass(tab === 'players');
+    filesTabButton.className = tabClass(tab === 'files');
     addonsTabButton.className = (addonsSupported ? '' : 'hidden ') + tabClass(tab === 'addons');
     propertiesTabButton.className = tabClass(tab === 'properties');
     settingsTabButton.className = tabClass(tab === 'settings');
@@ -510,11 +517,13 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
         ? consolePanel
         : tab === 'players'
           ? playersPanel
-          : tab === 'addons'
-            ? addonsPanel
-            : tab === 'properties'
-              ? propertiesPanel
-              : settingsPanel;
+          : tab === 'files'
+            ? filesPanel
+            : tab === 'addons'
+              ? addonsPanel
+              : tab === 'properties'
+                ? propertiesPanel
+                : settingsPanel;
     mount(tabPanelSlot, panel);
     // Швидка поява вмісту при перемиканні вкладки.
     replayAnim(tabPanelSlot, 'anim-fade');
@@ -528,6 +537,11 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     if (tab === 'players' && !playersCleanup) {
       playersCleanup = renderPlayersPanel(playersPanel, serverId, () => server);
     }
+    // Файловий менеджер підвантажуємо щоразу при відкритті — файли могли змінитись.
+    if (tab === 'files') {
+      filesCleanup?.();
+      filesCleanup = renderFileManager(filesPanel, serverId);
+    }
     if (tab === 'addons' && !addonsCleanup) {
       addonsCleanup = renderAddonsPanel(addonsPanel, serverId);
     }
@@ -535,6 +549,7 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
 
   consoleTabButton.addEventListener('click', () => selectTab('console'));
   playersTabButton.addEventListener('click', () => selectTab('players'));
+  filesTabButton.addEventListener('click', () => selectTab('files'));
   addonsTabButton.addEventListener('click', () => selectTab('addons'));
   propertiesTabButton.addEventListener('click', () => selectTab('properties'));
   settingsTabButton.addEventListener('click', () => selectTab('settings'));
@@ -563,9 +578,10 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     ),
     el(
       'div',
-      { class: 'mb-4 flex border-b border-zinc-800' },
+      { class: 'mb-4 flex flex-wrap border-b border-zinc-800' },
       consoleTabButton,
       playersTabButton,
+      filesTabButton,
       addonsTabButton,
       propertiesTabButton,
       settingsTabButton,

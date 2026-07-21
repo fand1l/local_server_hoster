@@ -5,11 +5,15 @@ import { BTN, KIND_LABELS } from './ui';
 import type { ServerKind, ServerView, SystemInfo } from './types';
 
 /** Загальний каркас модального вікна. Повертає функцію закриття. */
-function openModal(title: string, body: HTMLElement): () => void {
+function openModal(title: string, body: HTMLElement, onClose?: () => void): () => void {
+  let closed = false;
   // Закриття з коротким fade-out фону і вікна, потім видалення з DOM.
   const close = (): void => {
+    if (closed) return;
+    closed = true;
     overlay.classList.add('anim-fade-out');
     setTimeout(() => overlay.remove(), 110);
+    onClose?.();
   };
 
   const overlay = el(
@@ -44,6 +48,60 @@ function openModal(title: string, body: HTMLElement): () => void {
 
   document.body.append(overlay);
   return close;
+}
+
+/**
+ * Проста модалка з одним текстовим полем (нова тека, перейменування тощо).
+ * Резолвиться значенням при підтвердженні або null при скасуванні/закритті.
+ */
+export function openInputModal(opts: {
+  title: string;
+  label: string;
+  value?: string;
+  placeholder?: string;
+  submitText?: string;
+}): Promise<string | null> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value: string | null): void => {
+      if (done) return;
+      done = true;
+      resolve(value);
+    };
+
+    const input = el('input', {
+      class: INPUT_CLASS,
+      type: 'text',
+      value: opts.value ?? '',
+      placeholder: opts.placeholder ?? '',
+    });
+    const submit = el('button', { class: `${BTN.primary} w-full py-2`, text: opts.submitText ?? 'OK' });
+
+    const body = el(
+      'form',
+      {
+        class: 'space-y-3',
+        onSubmit: (event) => {
+          event.preventDefault();
+          const value = input.value.trim();
+          if (!value) {
+            input.focus();
+            return;
+          }
+          finish(value);
+          close();
+        },
+      },
+      el('label', { class: 'block' }, el('span', { class: 'mb-1 block text-sm text-zinc-400', text: opts.label }), input),
+      submit,
+    );
+
+    const close = openModal(opts.title, body, () => finish(null));
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 30);
+  });
 }
 
 /** Поле форми з підписом. */

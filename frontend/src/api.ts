@@ -1,6 +1,9 @@
 import type {
   AddonInfo,
   AddonsResponse,
+  DirListing,
+  FileEntry,
+  FileTextContent,
   CoreVersionsResult,
   CreateServerInput,
   PlayerAction,
@@ -102,6 +105,40 @@ export const api = {
   },
   deleteAddon: (id: string, filename: string) =>
     request<void>(`/api/servers/${id}/addons/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+
+  // --- Файловий менеджер ---
+  listFiles: (id: string, path: string) =>
+    request<DirListing>(`/api/servers/${id}/files?path=${encodeURIComponent(path)}`),
+  readFile: (id: string, path: string) =>
+    request<FileTextContent>(`/api/servers/${id}/files/content?path=${encodeURIComponent(path)}`),
+  writeFile: (id: string, path: string, content: string) =>
+    request<FileTextContent>(`/api/servers/${id}/files/content`, {
+      method: 'PUT',
+      body: JSON.stringify({ path, content }),
+    }),
+  uploadFile: (id: string, dir: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return request<FileEntry>(`/api/servers/${id}/files/upload?path=${encodeURIComponent(dir)}`, {
+      method: 'POST',
+      body: form,
+    });
+  },
+  makeDir: (id: string, dir: string, name: string) =>
+    request<FileEntry>(`/api/servers/${id}/files/mkdir`, {
+      method: 'POST',
+      body: JSON.stringify({ path: dir, name }),
+    }),
+  renameFile: (id: string, path: string, newName: string) =>
+    request<FileEntry>(`/api/servers/${id}/files/rename`, {
+      method: 'POST',
+      body: JSON.stringify({ path, newName }),
+    }),
+  deleteFile: (id: string, path: string) =>
+    request<void>(`/api/servers/${id}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  /** URL для завантаження файлу (пряме посилання, віддається браузером). */
+  downloadFileUrl: (id: string, path: string) =>
+    `/api/servers/${id}/files/download?path=${encodeURIComponent(path)}`,
 
   getProperties: (id: string) => request<PropertiesResponse>(`/api/servers/${id}/properties`),
   saveProperties: (id: string, entries: PropertyEntry[]) =>

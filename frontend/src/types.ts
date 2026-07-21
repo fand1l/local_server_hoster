@@ -88,6 +88,22 @@ export interface PregenAvailability {
   reason: string | null;
 }
 
+export type FileEntryType = 'file' | 'directory';
+export interface FileEntry {
+  name: string;
+  type: FileEntryType;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+export interface DirListing {
+  path: string;
+  entries: FileEntry[];
+}
+export interface FileTextContent {
+  path: string;
+  content: string;
+}
+
 export type AddonCategory = 'plugins' | 'mods';
 
 export interface AddonInfo {

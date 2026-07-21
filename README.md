@@ -26,6 +26,8 @@ Node.js-бекенд керує серверами в ізольованих Doc
   кліком (через RCON без відкриття портів), голови скінів для ліцензійних акаунтів
 - ✅ Плагіни та моди без Docker: перетягніть `.jar` у панель — і він у `plugins/` (Paper/Spigot)
   або `mods/` (Fabric/Forge/NeoForge); список і видалення на місці
+- ✅ Файловий менеджер: навігація текою сервера, редагування конфігів прямо в браузері,
+  завантаження/вивантаження, теки, перейменування, видалення — без термінала й Docker
 - ✅ Онлайн/офлайн-режим при створенні (ліцензія) та автоматична прегенерація світу
   через Chunky — з **живою смужкою прогресу** (% / ETA / швидкість) у картці й над консоллю
 - ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — Node.js встановлювати не потрібно
@@ -398,7 +400,20 @@ say Привіт усім!         — повідомлення в чат
 > RCON назовні **не відкривається**, пароль лишається в контейнері. Якщо RCON вимкнено
 > у `server.properties`, команди йдуть у консоль через stdin (без підтвердження виконання).
 
-### 2.6. Додавайте плагіни та моди
+### 2.6. Керуйте файлами сервера
+
+Вкладка **Файли** — повноцінний файловий менеджер теки сервера просто в браузері,
+щоб не лізти в Docker чи термінал: навігація по теках, **редагування текстових
+конфігів на місці** (server.properties, YAML, JSON…), завантаження й вивантаження
+файлів (drag-and-drop теж працює), створення тек, перейменування та видалення.
+
+<p align="center"><img src="docs/screenshots/11-files.png" alt="Файловий менеджер сервера" width="800"></p>
+
+> [!NOTE]
+> Усі операції строго в межах теки сервера (захист від виходу за межі). Двійкові
+> й дуже великі файли не редагуються як текст — їх можна лише завантажити.
+
+### 2.7. Додавайте плагіни та моди
 
 Вкладка **Плагіни** (Paper/Spigot) або **Моди** (Fabric/Forge/NeoForge) — просто
 **перетягніть `.jar`-файл** у вікно (або натисніть, щоб обрати). Файл потрапляє у
@@ -411,7 +426,7 @@ say Привіт усім!         — повідомлення в чат
 > Прямого встановлення з Modrinth поки немає — лише завантаження власних `.jar`.
 > Якщо сервер запущено, після зміни плагінів/модів перезапустіть його.
 
-### 2.7. Редагуйте параметри сервера
+### 2.8. Редагуйте параметри сервера
 
 Вкладка **Параметри** — зміна налаштувань уже створеного сервера: назва редагується
 будь-коли, а пам'ять, ліміт CPU і порт — коли сервер зупинено (панель перестворює
@@ -419,7 +434,7 @@ say Привіт усім!         — повідомлення в чат
 
 <p align="center"><img src="docs/screenshots/07-settings.png" alt="Вкладка Параметри" width="800"></p>
 
-### 2.8. Зайдіть у гру
+### 2.9. Зайдіть у гру
 
 | Хто підключається | Адреса у грі (Multiplayer → Add Server) |
 | --- | --- |
@@ -535,16 +550,18 @@ local_server_hoster/
 │       │   ├── serverService.ts      # оркестрація CRUD + життєвого циклу
 │       │   ├── playerService.ts      # гравці: RCON (docker exec) + файли сервера
 │       │   ├── addonService.ts       # плагіни/моди: upload/list/delete у plugins|mods/
+│       │   ├── fileService.ts        # файловий менеджер: browse/read/write/upload/mkdir/rename/rm (path-safe)
 │       │   ├── pregenScheduler.ts    # автопрегенерація Chunky після старту (RCON-проба)
 │       │   └── pregenMonitor.ts      # фоновий парсинг прогресу Chunky з логів → WS/картка
 │       ├── routes/
 │       │   ├── servers.ts     # REST CRUD + start/stop/restart/PATCH (zod-валідація)
 │       │   ├── properties.ts  # GET/PUT server.properties
 │       │   ├── players.ts     # GET гравці / POST дія над гравцем
+│       │   ├── files.ts       # файловий менеджер: список/читання/запис/upload/rename/rm/download
 │       │   ├── meta.ts        # версії гри/ядра + доступність прегенерації
 │       │   ├── system.ts      # GET /api/system (стан Docker + ресурси)
 │       │   └── console.ws.ts  # WebSocket-роут консолі
-│       └── utils/             # порти (probe), шляхи (bind-mount, захист rm -rf)
+│       └── utils/             # порти (probe), шляхи (bind-mount, захист rm -rf, path-traversal)
 ├── frontend/                  # Vite + TypeScript + Tailwind CSS 4 (vanilla, без фреймворка)
 │   └── src/
 │       ├── main.ts            # каркас, hash-роутер, банер стану Docker
@@ -554,8 +571,11 @@ local_server_hoster/
 │       ├── ui.ts / toast.ts / modals.ts
 │       ├── types.ts           # дзеркало DTO бекенду
 │       └── views/
-│           ├── dashboard.ts   # картки серверів + створення
-│           └── serverDetail.ts# консоль + редактор properties
+│           ├── dashboard.ts   # картки серверів + майстер створення
+│           ├── serverDetail.ts# вкладки: консоль / гравці / файли / плагіни / параметри
+│           ├── playersPanel.ts# онлайн-гравці, whitelist/ops/bans, дії через RCON
+│           ├── fileManager.ts # файловий менеджер: навігація, редактор, upload, drag-drop
+│           └── addonsPanel.ts # плагіни/моди: drag-drop .jar, список, видалення
 └── docker/
     └── custom-jre/            # альтернатива: чистий JRE + свій server.jar
         ├── Dockerfile
@@ -653,6 +673,14 @@ npm run package -w backend      # → dist-release/mc-hoster-<os>-<arch>/
 | `GET /api/servers/:id/addons` | Список плагінів/модів (`supported`, `category: plugins\|mods\|null`) |
 | `POST /api/servers/:id/addons` | Завантажити `.jar` (multipart, поле `file`) → `201` |
 | `DELETE /api/servers/:id/addons/:filename` | Видалити плагін/мод → `204` |
+| `GET /api/servers/:id/files?path=` | Вміст теки: `{ path, entries: [{name,type,sizeBytes,modifiedAt}] }` (теки, потім файли) |
+| `GET /api/servers/:id/files/content?path=` | Текст файлу `{ path, content }`; бінарні та >2 МБ → `400` |
+| `PUT /api/servers/:id/files/content` | Зберегти текст `{ path, content }` (атомарний запис tmp+rename) |
+| `POST /api/servers/:id/files/upload?path=` | Завантажити файл у теку (multipart, поле `file`, ліміт 250 МБ) → `201` |
+| `POST /api/servers/:id/files/mkdir` | Створити теку `{ path?, name }` → `201` |
+| `POST /api/servers/:id/files/rename` | Перейменувати `{ path, newName }` |
+| `DELETE /api/servers/:id/files?path=` | Видалити файл/теку (корінь заборонено) → `204` |
+| `GET /api/servers/:id/files/download?path=` | Завантажити файл потоком (`Content-Disposition`, кирилиця через RFC 5987) |
 | `GET /api/servers/:id/console` (WS) | Консоль у реальному часі |
 
 Помилки завжди мають форму `{ "error": { "code", "message" } }`

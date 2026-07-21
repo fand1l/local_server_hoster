@@ -169,6 +169,27 @@ export interface PropertyEntry {
   value: string;
 }
 
+/** Запис у файловому менеджері (файл або тека). */
+export type FileEntryType = 'file' | 'directory';
+export interface FileEntry {
+  name: string;
+  type: FileEntryType;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+/** Вміст директорії (relative-шлях від кореня теки сервера; '' = корінь). */
+export interface DirListing {
+  path: string;
+  entries: FileEntry[];
+}
+
+/** Текстовий вміст файлу для редактора. */
+export interface FileTextContent {
+  path: string;
+  content: string;
+}
+
 /** Категорія доповнень сервера: плагіни (Paper/Spigot) чи моди (Fabric/Forge/NeoForge). */
 export type AddonCategory = 'plugins' | 'mods';
 
