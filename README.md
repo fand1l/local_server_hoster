@@ -25,7 +25,7 @@ Node.js-бекенд керує серверами в ізольованих Doc
 - ✅ Керування гравцями: онлайн-список, whitelist / оператори / бани, kick/ban/op одним
   кліком (через RCON без відкриття портів), голови скінів для ліцензійних акаунтів
 - ✅ Онлайн/офлайн-режим при створенні (ліцензія) та автоматична прегенерація світу
-  через Chunky — прибирає лаги підвантаження чанків
+  через Chunky — з **живою смужкою прогресу** (% / ETA / швидкість) у картці й над консоллю
 - ✅ Готові бінарі у [Releases](../../releases) із вшитим Node — Node.js встановлювати не потрібно
 - ✅ Образ [`itzg/minecraft-server`](https://docker-minecraft-server.readthedocs.io/) сам
   завантажує потрібний jar; панель сама підбирає правильну Java під версію гри
@@ -345,6 +345,12 @@ FabricMC, Forge, NeoForge), тому тут завжди є найновіші �
 
 <p align="center"><img src="docs/screenshots/02-create-step3.png" alt="Крок 3: ресурси, онлайн-режим, прегенерація" width="700"></p>
 
+Поки прегенерація триває, панель парсить прогрес Chunky з логів і показує **живу смужку**
+(відсоток, скільки залишилось, швидкість) — над консоллю сервера й компактно на його
+картці. Оновлюється в реальному часі через WebSocket:
+
+<p align="center"><img src="docs/screenshots/09-pregen.png" alt="Прогрес прегенерації над консоллю" width="800"></p>
+
 ### 2.2. Дочекайтеся статусу «Працює»
 
 Перше створення триває кілька хвилин: панель завантажує Docker-образ і jar сервера
@@ -508,11 +514,13 @@ local_server_hoster/
 │       ├── minecraft/
 │       │   ├── images.ts      # itzg-образ: env, вибір Java, ліміти пам'яті
 │       │   ├── versionCatalog.ts  # живі версії гри/ядра + Chunky (Mojang/Paper/Fabric/Forge/NeoForge/Modrinth)
+│       │   ├── chunkyProgress.ts  # парсер рядків прогресу Chunky з логів
 │       │   └── properties.ts  # парсер server.properties (зберігає коментарі)
 │       ├── services/
 │       │   ├── serverService.ts      # оркестрація CRUD + життєвого циклу
 │       │   ├── playerService.ts      # гравці: RCON (docker exec) + файли сервера
-│       │   └── pregenScheduler.ts    # автопрегенерація Chunky після старту (RCON-проба)
+│       │   ├── pregenScheduler.ts    # автопрегенерація Chunky після старту (RCON-проба)
+│       │   └── pregenMonitor.ts      # фоновий парсинг прогресу Chunky з логів → WS/картка
 │       ├── routes/
 │       │   ├── servers.ts     # REST CRUD + start/stop/restart/PATCH (zod-валідація)
 │       │   ├── properties.ts  # GET/PUT server.properties

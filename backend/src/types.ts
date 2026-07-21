@@ -63,11 +63,27 @@ export interface ServerRecord {
   updatedAt: string;
 }
 
+/** Живий прогрес прегенерації світу Chunky (у пам'яті, не в БД). */
+export interface PregenProgress {
+  /** running — генерується; finished — завершено; cancelled — зупинено. */
+  state: 'running' | 'finished' | 'cancelled';
+  /** 0..100 */
+  percent: number;
+  processedChunks: number;
+  /** Оцінка часу до завершення в секундах (від Chunky). */
+  etaSeconds: number | null;
+  /** Швидкість, чанків/с. */
+  rate: number | null;
+  updatedAt: string;
+}
+
 /** DTO, який віддаємо фронтенду: запис БД + обчислений живий стан. */
 export interface ServerView extends ServerRecord {
   runtime: RuntimeStatus;
   /** Додаткова інформація про живий стан (код виходу, "Docker недоступний" тощо). */
   runtimeDetail: string | null;
+  /** Прогрес прегенерації Chunky, якщо вона зараз відома; інакше null. */
+  pregenProgress: PregenProgress | null;
 }
 
 /** Поля сервера, які можна змінити після створення. */
@@ -156,7 +172,8 @@ export type ConsoleServerMessage =
   | { type: 'log'; data: string }
   | { type: 'info'; message: string }
   | { type: 'error'; message: string }
-  | { type: 'status'; runtime: RuntimeStatus };
+  | { type: 'status'; runtime: RuntimeStatus }
+  | { type: 'pregen'; progress: PregenProgress | null };
 
 /** Повідомлення WebSocket-консолі: клієнт → сервер. */
 export type ConsoleClientMessage = { type: 'command'; data: string };

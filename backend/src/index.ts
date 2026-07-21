@@ -13,6 +13,7 @@ import { registerPropertiesRoutes } from './routes/properties.js';
 import { registerServerRoutes } from './routes/servers.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { PlayerService } from './services/playerService.js';
+import { PregenMonitor } from './services/pregenMonitor.js';
 import { PregenScheduler } from './services/pregenScheduler.js';
 import { ServerService } from './services/serverService.js';
 
@@ -35,17 +36,25 @@ async function main(): Promise<void> {
 
   const app = await createApp(config);
 
+  // Монітор прогресу Chunky: парсить логи у фоні й пушить прогрес у консоль.
+  const pregenMonitor = new PregenMonitor({
+    containers,
+    onUpdate: (serverId, progress) => gateway.notifyPregen(serverId, progress),
+    log: app.log,
+  });
+
   // Планувальник прегенерації читає завжди свіжий запис і сам позначає виконання;
   // markDone відкладаємо через замикання, бо service створюється наступним рядком.
   let service: ServerService;
   const pregen = new PregenScheduler({
     containers,
     gateway,
+    monitor: pregenMonitor,
     getRecord: (id) => repo.get(id),
     markDone: (id) => service.markPregenDone(id),
     log: app.log,
   });
-  service = new ServerService({ config, repo, containers, gateway, pregen, log: app.log });
+  service = new ServerService({ config, repo, containers, gateway, pregen, pregenMonitor, log: app.log });
   const players = new PlayerService({ containers, gateway, log: app.log });
 
   registerSystemRoutes(app);
@@ -81,6 +90,7 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     app.log.info(`Отримано ${signal}, зупиняю панель (Minecraft-сервери продовжують працювати)`);
+    pregenMonitor.shutdown();
     gateway.shutdown();
     void app
       .close()

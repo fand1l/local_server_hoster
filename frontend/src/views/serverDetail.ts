@@ -2,10 +2,10 @@ import { api, ApiError } from '../api';
 import { el, mount } from '../dom';
 import { openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
-import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
+import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, pregenBar, statusBadge, withButtonLock } from '../ui';
 import { renderPlayersPanel } from './playersPanel';
 import { ConsoleConnection } from '../ws';
-import type { PropertyEntry, ServerView } from '../types';
+import type { PregenProgress, PropertyEntry, ServerView } from '../types';
 
 const REFRESH_INTERVAL_MS = 3000;
 /** Обмеження буфера консолі, щоб вкладка не з'їдала пам'ять на добових логах. */
@@ -103,6 +103,11 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
         case 'status':
           void refresh(); // стан змінився — оновлюємо заголовок без очікування полінгу
           break;
+        case 'pregen':
+          // Живе оновлення бару прегенерації (між полінгами).
+          livePregen = message.progress;
+          renderPregenSlot();
+          break;
       }
     },
     onConnectionChange(state) {
@@ -144,9 +149,21 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     }
   });
 
+  // Слот бару прегенерації над консоллю: оновлюється і полінгом (applyServer),
+  // і живими WS-повідомленнями 'pregen' (щосекунди).
+  const pregenSlot = el('div', {});
+  let livePregen: PregenProgress | null = null;
+
+  function renderPregenSlot(): void {
+    const progress = livePregen ?? server?.pregenProgress ?? null;
+    const bar = server?.runtime === 'running' || progress?.state !== 'running' ? pregenBar(progress) : null;
+    mount(pregenSlot, bar ?? el('span', { class: 'hidden' }));
+  }
+
   const consolePanel = el(
     'div',
     { class: 'space-y-2' },
+    pregenSlot,
     consoleOutput,
     el('div', { class: 'flex items-center gap-2' }, commandInput, sendButton),
     connectionState,
@@ -545,6 +562,11 @@ export function renderServerDetail(root: HTMLElement, serverId: string): () => v
     const consoleReady = view.runtime === 'running';
     commandInput.disabled = !consoleReady;
     sendButton.disabled = !consoleReady;
+
+    // Полінг приносить прогрес прегенерації — WS-значення застаріває, тож
+    // якщо сервер уже не працює, скидаємо живий стан.
+    if (view.runtime !== 'running') livePregen = null;
+    renderPregenSlot();
   }
 
   async function lifecycleAction(action: () => Promise<ServerView>): Promise<void> {

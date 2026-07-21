@@ -2,7 +2,7 @@ import { api, ApiError } from '../api';
 import { el, mount } from '../dom';
 import { openCreateServerModal, openDeleteServerModal } from '../modals';
 import { toast } from '../toast';
-import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, statusBadge, withButtonLock } from '../ui';
+import { BTN, chip, coreVersionChipText, formatMemory, KIND_LABELS, pregenBar, statusBadge, withButtonLock } from '../ui';
 import type { ServerView } from '../types';
 
 const REFRESH_INTERVAL_MS = 3000;
@@ -132,6 +132,8 @@ export function renderDashboard(root: HTMLElement): () => void {
       detailText
         ? el('p', { class: 'text-xs text-zinc-500 break-words', text: detailText })
         : null,
+      // Компактна смужка прогресу прегенерації (лише поки триває).
+      server.runtime === 'running' ? pregenBar(server.pregenProgress, true) : null,
       el(
         'div',
         { class: 'mt-auto flex flex-wrap gap-2 pt-1' },

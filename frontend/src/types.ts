@@ -9,6 +9,15 @@ export type ServerKind = (typeof SERVER_KINDS)[number];
 export type ProvisionStatus = 'provisioning' | 'ready' | 'error';
 export type RuntimeStatus = 'creating' | 'running' | 'stopped' | 'error' | 'unknown';
 
+export interface PregenProgress {
+  state: 'running' | 'finished' | 'cancelled';
+  percent: number;
+  processedChunks: number;
+  etaSeconds: number | null;
+  rate: number | null;
+  updatedAt: string;
+}
+
 export interface ServerView {
   id: string;
   name: string;
@@ -31,6 +40,7 @@ export interface ServerView {
   updatedAt: string;
   runtime: RuntimeStatus;
   runtimeDetail: string | null;
+  pregenProgress: PregenProgress | null;
 }
 
 export interface CreateServerInput {
@@ -119,6 +129,7 @@ export type ConsoleServerMessage =
   | { type: 'log'; data: string }
   | { type: 'info'; message: string }
   | { type: 'error'; message: string }
-  | { type: 'status'; runtime: RuntimeStatus };
+  | { type: 'status'; runtime: RuntimeStatus }
+  | { type: 'pregen'; progress: PregenProgress | null };
 
 export type ConsoleClientMessage = { type: 'command'; data: string };

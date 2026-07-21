@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import type Docker from 'dockerode';
 import { isDockerNotFound, translateDockerError } from '../errors.js';
 import {
@@ -164,6 +164,47 @@ export class ContainerManager {
       if (isDockerNotFound(err)) return;
       throw translateDockerError(err, 'Видалення контейнера');
     }
+  }
+
+  /**
+   * Підписка на логи контейнера ПОРЯДКОВО (для фонового парсингу прогресу
+   * Chunky, незалежно від того, чи відкрита консоль). Повертає функцію зупинки.
+   * `tail` — скільки останніх рядків отримати одразу (для швидкого відновлення
+   * стану після рестарту панелі).
+   */
+  async streamLogLines(
+    containerId: string,
+    tail: number,
+    onLine: (line: string) => void,
+  ): Promise<() => void> {
+    const container = this.docker.getContainer(containerId);
+    let stream: NodeJS.ReadableStream;
+    try {
+      stream = await container.logs({ follow: true, stdout: true, stderr: true, tail });
+    } catch (err) {
+      throw translateDockerError(err, 'Підписка на логи контейнера');
+    }
+
+    let buffer = '';
+    const sink = new Writable({
+      write(chunk: Buffer, _enc, cb) {
+        buffer += chunk.toString('utf8');
+        let nl = buffer.indexOf('\n');
+        while (nl !== -1) {
+          const line = buffer.slice(0, nl).replace(/\r$/, '');
+          buffer = buffer.slice(nl + 1);
+          if (line) onLine(line);
+          nl = buffer.indexOf('\n');
+        }
+        cb();
+      },
+    });
+    // Tty=false → потік мультиплексований; demux розкладає stdout/stderr.
+    this.docker.modem.demuxStream(stream, sink, sink);
+
+    return () => {
+      (stream as unknown as { destroy?: () => void }).destroy?.();
+    };
   }
 
   /**

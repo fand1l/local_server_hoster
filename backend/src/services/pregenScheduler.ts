@@ -2,6 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { ContainerManager } from '../docker/containerManager.js';
 import type { ConsoleGateway } from '../docker/consoleGateway.js';
 import type { ServerRecord } from '../types.js';
+import type { PregenMonitor } from './pregenMonitor.js';
 import type { Logger } from './serverService.js';
 
 /**
@@ -26,6 +27,7 @@ const READINESS_POLL_MS = 5000;
 interface PregenSchedulerDeps {
   containers: ContainerManager;
   gateway: ConsoleGateway;
+  monitor: PregenMonitor;
   /** Завжди свіжий запис (containerId міг змінитися після перестворення). */
   getRecord: (id: string) => ServerRecord | null;
   /** Позначити прегенерацію як виконану, щоб не запускати її повторно. */
@@ -75,6 +77,8 @@ export class PregenScheduler {
         serverId,
         `Запускаю автопрегенерацію Chunky (радіус ${fresh.pregenRadius} блоків)…`,
       );
+      // Вмикаємо монітор ДО старту, щоб зловити перші рядки прогресу.
+      this.deps.monitor.ensureMonitoring(fresh);
       // Радіус (у блоках від центру світу) + старт. rcon-cli вбудований в образ.
       const setRadius = await this.deps.containers.execCapture(fresh.containerId, [
         'rcon-cli',

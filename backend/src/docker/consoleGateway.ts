@@ -3,7 +3,7 @@ import { StringDecoder } from 'node:string_decoder';
 import type Docker from 'dockerode';
 import type { WebSocket } from 'ws';
 import { BadRequestError, ConflictError, isDockerNotFound } from '../errors.js';
-import type { ConsoleServerMessage, RuntimeStatus, ServerRecord } from '../types.js';
+import type { ConsoleServerMessage, PregenProgress, RuntimeStatus, ServerRecord } from '../types.js';
 
 /** Скільки останніх рядків логу віддавати новому глядачу консолі. */
 const LOG_TAIL_LINES = 200;
@@ -277,6 +277,11 @@ export class ConsoleGateway {
   /** Показує інформаційне повідомлення панелі у відкритих консолях сервера (якщо є). */
   notifyInfo(serverId: string, message: string): void {
     this.sessions.get(serverId)?.broadcast({ type: 'info', message });
+  }
+
+  /** Транслює живий прогрес прегенерації у відкриті консолі сервера (для бару). */
+  notifyPregen(serverId: string, progress: PregenProgress | null): void {
+    this.sessions.get(serverId)?.broadcast({ type: 'pregen', progress });
   }
 
   /** Викликається при видаленні сервера: закриває консолі всіх глядачів. */

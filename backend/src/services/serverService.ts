@@ -9,6 +9,7 @@ import { assertDockerAvailable, ensureImage, isDockerAvailable } from '../docker
 import type { ContainerManager } from '../docker/containerManager.js';
 import type { ConsoleGateway } from '../docker/consoleGateway.js';
 import type { PregenScheduler } from './pregenScheduler.js';
+import type { PregenMonitor } from './pregenMonitor.js';
 import { ConflictError, NotFoundError } from '../errors.js';
 import { resolveImageForVersion } from '../minecraft/images.js';
 import {
@@ -39,6 +40,7 @@ interface ServerServiceDeps {
   containers: ContainerManager;
   gateway: ConsoleGateway;
   pregen: PregenScheduler;
+  pregenMonitor: PregenMonitor;
   log: Logger;
 }
 
@@ -63,6 +65,7 @@ export class ServerService {
   private readonly containers: ContainerManager;
   private readonly gateway: ConsoleGateway;
   private readonly pregen: PregenScheduler;
+  private readonly pregenMonitor: PregenMonitor;
   private readonly log: Logger;
 
   constructor(deps: ServerServiceDeps) {
@@ -71,6 +74,7 @@ export class ServerService {
     this.containers = deps.containers;
     this.gateway = deps.gateway;
     this.pregen = deps.pregen;
+    this.pregenMonitor = deps.pregenMonitor;
     this.log = deps.log;
   }
 
@@ -94,35 +98,40 @@ export class ServerService {
 
   /** Обчислює зведений runtime-стан для UI (див. RuntimeStatus у types.ts). */
   private async toView(record: ServerRecord, dockerUp: boolean): Promise<ServerView> {
+    const pregenProgress = this.pregenMonitor.getProgress(record.id);
+    const base = { ...record, pregenProgress };
+
     if (record.status === 'provisioning') {
-      return { ...record, runtime: 'creating', runtimeDetail: record.statusDetail };
+      return { ...base, runtime: 'creating', runtimeDetail: record.statusDetail };
     }
     if (record.status === 'error') {
-      return { ...record, runtime: 'error', runtimeDetail: record.statusDetail };
+      return { ...base, runtime: 'error', runtimeDetail: record.statusDetail };
     }
     if (!dockerUp) {
-      return { ...record, runtime: 'unknown', runtimeDetail: 'Docker-демон недоступний' };
+      return { ...base, runtime: 'unknown', runtimeDetail: 'Docker-демон недоступний' };
     }
     if (!record.containerId) {
-      return { ...record, runtime: 'stopped', runtimeDetail: 'Контейнер буде створено при запуску' };
+      return { ...base, runtime: 'stopped', runtimeDetail: 'Контейнер буде створено при запуску' };
     }
 
     const state = await this.containers.inspectState(record.containerId).catch(() => null);
     if (!state?.exists) {
       return {
-        ...record,
+        ...base,
         runtime: 'stopped',
         runtimeDetail: 'Контейнер відсутній — буде створений повторно при запуску',
       };
     }
     if (state.running) {
-      return { ...record, runtime: 'running', runtimeDetail: null };
+      // Живий сервер із увімкненою прегенерацією — переконуємось, що монітор працює.
+      this.pregenMonitor.ensureMonitoring(record);
+      return { ...base, runtime: 'running', runtimeDetail: null };
     }
     const detail =
       state.exitCode !== null && state.exitCode !== 0
         ? `Процес завершився з кодом ${state.exitCode}`
         : null;
-    return { ...record, runtime: 'stopped', runtimeDetail: detail };
+    return { ...base, runtime: 'stopped', runtimeDetail: detail };
   }
 
   private mustGet(id: string): ServerRecord {
@@ -389,6 +398,9 @@ export class ServerService {
     // Graceful stop може тривати до 60 с (збереження світу). Чекаємо максимум
     // STOP_WAIT_BUDGET_MS у межах запиту, далі зупинка триває у фоні, а UI
     // бачить актуальний стан через полінг.
+    // Зупинка сервера обриває й генерацію Chunky — закриваємо монітор логів.
+    this.pregenMonitor.stop(id);
+
     const stopPromise = this.containers
       .stop(record.containerId)
       .then(() => this.gateway.notifyRuntimeChange(record, 'stopped'))
@@ -438,6 +450,7 @@ export class ServerService {
       await this.containers.removeIfExists(record.containerId);
     }
 
+    this.pregenMonitor.stop(id, true);
     this.gateway.closeServer(id, 'Сервер видалено.');
     this.repo.delete(id);
 
